@@ -276,6 +276,25 @@
   const statusEl = $('status'), statusText = $('statusText'), typed = $('typed');
   let sid = null, busy = false, rec = null, listening = false;
   let turnCount = 0;
+  // The server hands back its session state with every reply; we echo it on the
+  // next turn so the conversation survives a serverless instance change, where
+  // the server's own copy may not be there.
+  let stateData = null;
+
+  function remember(r) {
+    if (r && r.state_data) {
+      stateData = r.state_data;
+      try { sessionStorage.setItem('appealmate_state', JSON.stringify(stateData)); } catch (e) {}
+    }
+  }
+  function recall() {
+    if (stateData) return stateData;
+    try {
+      const raw = sessionStorage.getItem('appealmate_state');
+      if (raw) { stateData = JSON.parse(raw); sid = stateData.session_id; return stateData; }
+    } catch (e) {}
+    return null;
+  }
 
   const esc = s => String(s).replace(/[&<>"']/g, c =>
     ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -309,6 +328,9 @@
     try {
       const r = await api('/api/session', {method:'POST'});
       sid = r.session_id;
+      stateData = null;                       // a fresh session, no echo yet
+      try { sessionStorage.removeItem('appealmate_state'); } catch (e) {}
+      remember(r);
       ariaSays(r.transcript);
       play(r.say);
       setStatus('Listening for you', 'ready');
@@ -319,7 +341,9 @@
   }
 
   async function tell(text) {
-    if (busy || !sid || !text.trim()) return;
+    if (busy || !text.trim()) return;
+    if (!sid) { await begin(); }
+    if (!sid) return;
     busy = true;
     pushTurn('You', text);
     sayText.textContent = '…';
@@ -327,8 +351,15 @@
     try {
       const r = await api('/api/session/' + sid + '/say', {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({text})
+        body: JSON.stringify({text, state_data: recall()})
       });
+      // The server answers {error:...} when the session is gone. Saying nothing
+      // at all, as this used to, leaves the caller staring at "…" forever.
+      if (r.error || !r.transcript) {
+        await recover(text);
+        return;
+      }
+      remember(r);
       ariaSays(r.transcript);
       play(r.say);
       if (r.refused) setStatus('No appeal filed — I explained why', 'stop');
@@ -338,9 +369,37 @@
       else setStatus('Listening for you', 'ready');
       refresh();
     } catch (e) {
+      ariaSays("Sorry — I lost the connection for a moment. Please say that again.");
       setStatus('Connection problem — try again', 'stop');
     }
     busy = false;
+  }
+
+  // The session expired (or the server forgot it): start a fresh one and
+  // replay the caller's answer, so the conversation continues instead of
+  // stalling on an ellipsis.
+  async function recover(text) {
+    setStatus('Reconnecting…', 'thinking');
+    sid = null;
+    await begin();
+    if (!sid) { setStatus('Could not reconnect — tap Start over', 'stop'); return; }
+    try {
+      const r = await api('/api/session/' + sid + '/say', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({text, state_data: recall()})
+      });
+      if (r.transcript) {
+        remember(r);
+        ariaSays(r.transcript);
+        play(r.say);
+        setStatus('Listening for you', 'ready');
+      } else {
+        ariaSays("Sorry — I lost track of our conversation. Could you start me off again with your name?");
+        setStatus('Let\u2019s start again', 'ready');
+      }
+    } catch (e) {
+      ariaSays("Sorry — I lost track of our conversation. Could you start me off again with your name?");
+    }
   }
 
   function showForm(form) {

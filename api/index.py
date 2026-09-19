@@ -75,7 +75,8 @@ def _route(method: str, path: str, body: dict):
             return 200, "application/json", json.dumps(agent.start_session())
         m = re.match(r"^/api/session/([^/]+)/say$", path)
         if m:
-            return 200, "application/json", json.dumps(agent.send(m.group(1), body.get("text", "")))
+            return 200, "application/json", json.dumps(
+                agent.send(m.group(1), body.get("text", ""), body.get("state_data")))
         return 404, "application/json", json.dumps({"error": "not found"})
 
     return 405, "application/json", json.dumps({"error": "method not allowed"})

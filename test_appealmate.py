@@ -168,18 +168,21 @@ class TestFullConversation(unittest.TestCase):
             if r["state"] != "interview":
                 return r
 
-    def test_intro_is_confident_and_promises_consent(self):
-        """The intro must sound certain, and still promise no filing without consent.
+    def test_intro_states_purpose_and_asks_for_the_name(self):
+        """The intro names what Aria does and asks for the name, nothing more.
 
-        An earlier version said "we'll take this one step at a time" and "you can
-        tell me to stop at any moment" — accurate, but hesitant, which is the
-        opposite of what someone just denied needs to hear. The stop capability
-        is unchanged and is covered by test_stop_word_works_immediately.
+        The consent promise used to be spoken here too ("I won't file anything
+        until you tell me to"). It was removed by request — it is reassurance the
+        caller has not asked for yet, and it delayed the work. The approval gate
+        itself is unchanged and is covered by test_file_only_after_consent.
+
+        An earlier version also said "we'll take this one step at a time" and
+        "you can tell me to stop at any moment", which read as hesitant.
         """
         t = self.start["transcript"]
         self.assertIn("Aria", t)
-        self.assertIn("your name", t)
-        self.assertIn("won't file", t)          # the consent promise
+        self.assertIn("name", t)                 # asks for it
+        self.assertIn("appeal", t)               # says what she does
         for hedge in ("one step at a time", "I'm sorry", "maybe", "I'll try"):
             self.assertNotIn(hedge, t)
 
@@ -343,6 +346,43 @@ class TestRefusalPath(unittest.TestCase):
         self.assertEqual(r["state"], "refused")
         self.assertTrue(r["refused"])
         self.assertIn("Nothing has been filed", r["transcript"])
+
+
+class TestSessionSurvivesInstanceChange(unittest.TestCase):
+    """A serverless host may answer the next turn from an instance that never
+    saw this conversation, and its database is per-instance. The client echoes
+    the session back, and the turn must continue rather than go silent."""
+
+    def test_turn_works_when_server_has_forgotten_the_session(self):
+        agent.SESSIONS.clear()
+        sid = agent.start_session()["session_id"]
+        r = agent.send(sid, "Maria Fernandez")
+        self.assertEqual(r["state"], "asking")
+        self.assertIn("state_data", r, "reply must carry the session back")
+
+        carried = r["state_data"]
+
+        # Simulate landing on a different instance: nothing in memory, nothing
+        # in the database.
+        agent.SESSIONS.clear()
+        import store
+        orig = store.load_session
+        store.load_session = lambda _sid: None
+        try:
+            r2 = agent.send(sid, "A123456789", carried)
+        finally:
+            store.load_session = orig
+
+        self.assertNotIn("error", r2, "must not lose the conversation")
+        self.assertEqual(r2["state"], "asking")
+        self.assertEqual(r2["field"], "service_denied")
+
+    def test_malformed_echo_is_ignored_not_fatal(self):
+        agent.SESSIONS.clear()
+        sid = agent.start_session()["session_id"]
+        r = agent.send(sid, "Maria Fernandez")
+        r2 = agent.send(sid, "B123", {"nonsense": True})
+        self.assertNotEqual(r2.get("state"), None)
 
 
 class TestVoice(unittest.TestCase):

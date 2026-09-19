@@ -75,7 +75,8 @@ class Handler(BaseHTTPRequestHandler):
             return
         m = re.match(r"^/api/session/([^/]+)/say$", self.path)
         if m:
-            self._json(agent.send(m.group(1), body.get("text", "")))
+            self._json(agent.send(m.group(1), body.get("text", ""),
+                                  body.get("state_data")))
             return
         self._json({"error": "not found"}, 404)
 

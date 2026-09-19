@@ -29,15 +29,13 @@ import store
 import voice
 
 
-# The introduction Aria speaks first. Confident and warm, not tentative: the
-# member has just been told their care is denied, and they need to hear someone
-# who sounds certain they can help. The safety promise is still here, stated
-# plainly rather than hedged.
+# The introduction Aria speaks first. It states what she does, then asks for the
+# story. No preamble about what she will not do — that is reassurance the caller
+# has not asked for yet, and it delays the work.
 INTRO = (
-    "Hello, I'm Aria. I help people appeal health insurance denials, and I'm "
-    "good at it. Tell me what was denied, and I'll find the rule your plan "
-    "overlooked and write your appeal for you. I won't file anything until you "
-    "tell me to. Let's start — what's your name?"
+    "Hello, I'm Aria. I help people appeal health insurance denials. Tell me "
+    "what was denied, and I'll write your appeal using your plan's own rules. "
+    "To begin, what is your name?"
 )
 
 # Fields Aria asks about, in order. The two on the ID card and the member's own
@@ -212,12 +210,27 @@ def _ask_interview(s: Session) -> dict:
             "say": voice.speak(q), "transcript": q}
 
 
-def send(sid: str, user_text: str) -> dict:
-    """Main conversational turn. Returns what Aria says next."""
+def send(sid: str, user_text: str, state: dict | None = None) -> dict:
+    """Main conversational turn. Returns what Aria says next.
+
+    `state` is the caller's own copy of the session, echoed back by the client.
+    On a serverless host each request may land on an instance that never saw
+    this conversation, and the SQLite database there is per-instance, so the
+    stored session can be missing. Accepting the client's copy makes the
+    conversation survive that, and makes a lost session impossible rather than
+    merely unlikely.
+    """
+    if state and sid not in SESSIONS:
+        try:
+            SESSIONS[sid] = _from_payload(state)
+        except (KeyError, TypeError):
+            pass  # a malformed echo is ignored; _load will fall back to the DB
     result = _send_inner(sid, user_text)
     s = SESSIONS.get(sid)
     if s is not None:
         _save(s)
+        # Hand the state back so the client can echo it on the next turn.
+        result["state_data"] = _to_payload(s)
     return result
 
 
@@ -370,10 +383,13 @@ def _analyze(s: Session, lead: str | None = None) -> dict:
         if script:
             s.interview = list(script)
             s.cursor = 0
-            lead = ("Good news — I found the rule your plan overlooked. %s "
-                    "Now I need a few details from you, because those details are "
-                    "what make the argument land. A few short questions."
-                    % pol["cpb"].split("—")[0].strip().rstrip(".") + ".")
+            # Name the bulletin in its own sentence. Building this as
+            # "text % x + '.'" put the period on the format string, not the
+            # result, and glued the sentence to the next one.
+            bulletin = pol["cpb"].split("—")[0].strip().rstrip(".")
+            lead = ("Good news — I found the rule your plan overlooked: %s. "
+                    "Now I need a few details from you, because those details "
+                    "are what make the argument land." % bulletin)
             first = _ask_interview(s)
             first["transcript"] = lead + " " + first["transcript"]
             first["say"] = voice.speak(first["transcript"])
