@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AppealMate — Your Appeal Assistant</title>
+<style>
+  :root {
+    --ink:#1a2340; --soft:#5a6480; --line:#d9dfec; --bg:#f4f6fb;
+    --accent:#1d4ed8; --accent-soft:#e8eefc; --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
+  }
+  * { box-sizing:border-box; -webkit-text-size-adjust:100%; }
+  body { margin:0; font-family: Georgia, "Times New Roman", serif; background:var(--bg); color:var(--ink); }
+  .shell { max-width:900px; margin:0 auto; padding:18px 16px 60px; }
+
+  header { display:flex; align-items:center; gap:14px; padding:10px 0 18px; }
+  .logo { width:54px; height:54px; border-radius:50%; background:var(--accent); color:#fff;
+          display:flex; align-items:center; justify-content:center; font-size:28px; }
+  header h1 { font-size:26px; margin:0; }
+  header p { margin:2px 0 0; color:var(--soft); font-size:16px; }
+
+  .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:22px; }
+
+  /* The conversation: large text, high contrast */
+  #convo { min-height:180px; }
+  .msg { font-size:21px; line-height:1.55; margin:0 0 14px; }
+  .msg.aria { color:var(--ink); }
+  .msg.you { color:var(--soft); font-style:italic; }
+  .msg .who { font-size:14px; font-family:Arial, sans-serif; letter-spacing:.4px;
+              text-transform:uppercase; color:var(--accent); display:block; margin-bottom:2px; }
+
+  /* One big control at a time */
+  .controls { display:flex; flex-direction:column; gap:14px; margin-top:18px; }
+  button.big { font-family:Georgia, serif; font-size:24px; padding:20px 26px; border-radius:14px;
+               border:none; cursor:pointer; background:var(--accent); color:#fff; }
+  button.big:hover { background:#1e40af; }
+  button.big.listening { background:var(--bad); animation:pulse 1.2s infinite; }
+  button.big.secondary { background:#fff; color:var(--accent); border:3px solid var(--accent); }
+  button.big:disabled { opacity:.45; cursor:default; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.75} }
+  .hint { font-size:16px; color:var(--soft); text-align:center; font-family:Arial, sans-serif; }
+
+  /* Live transcript of what the caller says */
+  #live { min-height:34px; font-size:19px; color:var(--soft); font-style:italic;
+          border-bottom:2px solid var(--line); padding:6px 2px; margin-top:4px; }
+
+  .status-row { display:flex; gap:10px; align-items:center; margin-top:16px; flex-wrap:wrap; }
+  .pill { background:var(--accent-soft); color:var(--accent); font-family:Arial,sans-serif;
+          font-size:14px; padding:6px 14px; border-radius:99px; }
+  .pill.ok { background:#dcfce7; color:var(--ok); }
+  .pill.warn { background:#fef3c7; color:var(--warn); }
+  .pill.bad { background:#fee2e2; color:var(--bad); }
+
+  details { margin-top:18px; font-family:Arial, sans-serif; }
+  summary { cursor:pointer; font-size:16px; color:var(--soft); }
+  details pre { background:var(--ink); color:#e6ecff; padding:14px; border-radius:10px;
+                font-size:12px; overflow:auto; }
+
+  footer { margin-top:26px; font-size:14px; color:var(--soft); font-family:Arial,sans-serif;
+           line-height:1.5; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div class="logo">&#9829;</div>
+    <div>
+      <h1>AppealMate</h1>
+      <p>Talk to Aria. She helps you appeal an insurance denial.</p>
+    </div>
+  </header>
+
+  <section class="card">
+    <div id="convo" aria-live="polite">
+      <p class="msg aria"><span class="who">Aria</span>
+        Press the big blue button and say hello. I'll walk you through everything, one step at a time.</p>
+    </div>
+    <div id="live">&nbsp;</div>
+
+    <div class="controls">
+      <button class="big" id="talk">&#127908; Press to talk</button>
+      <button class="big secondary" id="restart" style="display:none">Start over</button>
+      <p class="hint">Your words stay on this device. Nothing is filed until you say so.</p>
+    </div>
+
+    <div class="status-row">
+      <span class="pill" id="state">not started</span>
+      <span class="pill" id="voice" style="display:none">voice</span>
+    </div>
+
+    <details>
+      <summary>Show the agent's work (audit trail)</summary>
+      <pre id="trace">—</pre>
+    </details>
+  </section>
+
+  <footer>
+    AppealMate is a demonstration built for the Miami AI Hackathon. Policy criteria are verbatim
+    excerpts from real Aetna Clinical Policy Bulletins (CPB 0228, 0325, 0271). This is not
+    clinical or legal advice.
+    <br><a href="/slides">View the presentation deck &rarr;</a>
+  </footer>
+</div>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const convo = $('convo'), live = $('live'), talkBtn = $('talk');
+  let sessionId = null, busy = false, recognizer = null, listening = false;
+
+  function addMsg(who, text) {
+    const p = document.createElement('p');
+    p.className = 'msg ' + (who === 'Aria' ? 'aria' : 'you');
+    p.innerHTML = '<span class="who">' + who + '</span>' + escapeHtml(text);
+    convo.appendChild(p);
+    convo.scrollTop = convo.scrollHeight;
+  }
+  function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function setState(label, cls) {
+    const el = $('state');
+    el.textContent = label; el.className = 'pill' + (cls ? ' ' + cls : '');
+  }
+
+  async function api(path, opts) { const r = await fetch(path, opts); return r.json(); }
+
+  function playAudio(res) {
+    if (res.say && res.say.audio_b64) {
+      try {
+        const audio = new Audio('data:audio/mpeg;base64,' + res.say.audio_b64);
+        audio.play().catch(()=>{});
+      } catch(e) {}
+    }
+  }
+
+  async function start() {
+    busy = true;
+    const res = await api('/api/session', {method:'POST'});
+    sessionId = res.session_id;
+    addMsg('Aria', res.transcript);
+    playAudio(res);
+    setState('listening for you', 'ok');
+    busy = false;
+  }
+
+  async function say(text) {
+    if (busy || !sessionId) return;
+    busy = true;
+    addMsg('You', text);
+    setState('thinking\u2026', 'warn');
+    const res = await api('/api/session/' + sessionId + '/say', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({text})
+    });
+    addMsg('Aria', res.transcript);
+    playAudio(res);
+    if (res.refused) setState('no appeal filed \u2014 told you why', 'bad');
+    else if (res.state === 'filed') { setState('appeal filed \u2713', 'ok'); showForm(res.form); }
+    else if (res.state === 'drafted') setState('draft ready \u2014 say \u201cfile it\u201d to send', 'warn');
+    else if (res.state === 'stopped') setState('stopped \u2014 nothing filed', 'bad');
+    else setState('listening for you', 'ok');
+    refreshTrace();
+    busy = false;
+  }
+
+  function showForm(form) {
+    const box = document.createElement('details');
+    box.open = true;
+    let rows = form.fields.map(f =>
+      '<tr><td><b>' + escapeHtml(f.label) + '</b></td><td>' + escapeHtml(f.value || '—') + '</td></tr>').join('');
+    box.innerHTML = '<summary>Appeal submitted — confirmation ' + escapeHtml(form.confirmation) + '</summary>' +
+      '<table style="width:100%;font-size:16px;font-family:Arial">' + rows + '</table>';
+    convo.appendChild(box);
+  }
+
+  async function refreshTrace() {
+    if (!sessionId) return;
+    const s = await api('/api/session/' + sessionId);
+    $('trace').textContent = JSON.stringify(s.trace, null, 2);
+  }
+
+  // ---- speech recognition (browser Web Speech API; captions shown live) ----
+  function initSpeech() {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { talkBtn.disabled = true; talkBtn.textContent = 'Typing mode — type below';
+               const t = document.createElement('input');
+               t.style.cssText = 'font-size:22px;padding:12px;width:100%;border-radius:10px;border:2px solid #d9dfec';
+               t.placeholder = 'Type your answer here, then press Enter';
+               t.onkeydown = e => { if (e.key === 'Enter' && t.value.trim()) { say(t.value.trim()); t.value=''; } };
+               talkBtn.parentNode.insertBefore(t, talkBtn.nextSibling);
+               return; }
+    recognizer = new SR();
+    recognizer.lang = 'en-US';
+    recognizer.interimResults = true;
+    recognizer.continuous = false;
+
+    recognizer.onresult = e => {
+      let final_text = '', interim = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const r = e.results[i];
+        if (r.isFinal) final_text += r[0].transcript; else interim += r[0].transcript;
+      }
+      live.textContent = interim || final_text;
+      if (final_text.trim()) { stopListening(); say(final_text.trim()); }
+    };
+    recognizer.onerror = e => { stopListening(); live.textContent = ' (' + e.error + ' — try again) '; };
+    recognizer.onend = () => { if (listening) stopListening(); };
+  }
+
+  function stopListening() {
+    listening = false;
+    try { recognizer.stop(); } catch(e) {}
+    talkBtn.classList.remove('listening');
+    talkBtn.innerHTML = '&#127908; Press to talk';
+  }
+
+  talkBtn.onclick = () => {
+    if (!sessionId) { start(); return; }
+    if (listening) { stopListening(); return; }
+    listening = true;
+    live.textContent = 'Listening\u2026';
+    talkBtn.classList.add('listening');
+    talkBtn.textContent = 'Listening — speak now, tap to stop';
+    try { recognizer.start(); } catch(e) {}
+  };
+
+  $('restart').style.display = 'inline-block';
+  $('restart').onclick = () => { location.reload(); };
+
+  initSpeech();
+</script>
+</body>
+</html>

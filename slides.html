@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AppealMate — Presentation</title>
+<style>
+  :root {
+    --ink:#101830; --soft:#7a86a8; --bg:#0d1530; --card:#141f42; --line:#26335f;
+    --accent:#5b8bff; --ok:#4ade80; --warn:#fbbf24; --bad:#f87171;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font-family:"Segoe UI", Arial, sans-serif; background:var(--bg); color:#eef2ff; }
+
+  .slide { display:none; min-height:100vh; padding:56px 72px; flex-direction:column; justify-content:center; }
+  .slide.active { display:flex; }
+  h1 { font-size:64px; margin:0 0 18px; line-height:1.1; }
+  h2 { font-size:42px; margin:0 0 26px; color:var(--accent); }
+  p, li { font-size:26px; line-height:1.55; max-width:1000px; }
+  ul { padding-left:34px; }
+  .tag { display:inline-block; background:var(--card); border:1px solid var(--line);
+         padding:8px 18px; border-radius:99px; font-size:18px; color:var(--soft); margin-bottom:26px; }
+  .grid { display:grid; grid-template-columns:repeat(2, 1fr); gap:22px; margin-top:22px; }
+  .box { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:24px; }
+  .box h3 { margin:0 0 10px; font-size:24px; color:var(--accent); }
+  .box p { font-size:20px; margin:0; color:#c7d2f0; }
+  .big-quote { font-size:34px; font-style:italic; color:#dbe4ff; border-left:6px solid var(--accent);
+               padding-left:28px; }
+  .num { font-size:80px; font-weight:800; color:var(--accent); line-height:1; }
+
+  .nav { position:fixed; bottom:22px; right:30px; display:flex; gap:10px; }
+  .nav button { background:var(--card); color:#eef2ff; border:1px solid var(--line);
+                font-size:20px; border-radius:10px; padding:10px 18px; cursor:pointer; }
+  .counter { position:fixed; bottom:28px; left:32px; color:var(--soft); font-size:18px; }
+  .hintline { position:fixed; top:20px; right:30px; color:var(--soft); font-size:15px; }
+</style>
+</head>
+<body>
+
+<section class="slide active" id="s1">
+  <div class="tag">Miami AI Hackathon 2026 · Agentic Finance · Built with Mel + ElevenLabs</div>
+  <h1>AppealMate</h1>
+  <p class="big-quote">"You've been denied. Now what?"</p>
+  <p>A voice-first agent that helps Medicare Advantage beneficiaries appeal denied
+     prior authorizations — by simply talking.</p>
+</section>
+
+<section class="slide" id="s2">
+  <h2>The problem</h2>
+  <div class="grid">
+    <div class="box"><div class="num">~80%</div><p>of Medicare Advantage prior-auth denials that reach
+      appeal are overturned — but almost nobody appeals.</p></div>
+    <div class="box"><div class="num">1 page+</div><p>denial letters full of plan jargon:
+      "not medically necessary," "criteria not met," codes and clause numbers.</p></div>
+    <div class="box"><div class="num">65+</div><p>the typical caller: managing multiple conditions,
+      stressed, and expected to master CMS form fields and clinical-policy citations.</p></div>
+    <div class="box"><div class="num">60 days</div><p>the redetermination window — ticking from the
+      date on the letter, whether or not the member understands it.</p></div>
+  </div>
+  <p style="margin-top:26px">The appeal is winnable. The paperwork is the barrier.</p>
+</section>
+
+<section class="slide" id="s3">
+  <h2>Why an agent, and why voice</h2>
+  <ul>
+    <li><b>One button. Speak. Done.</b> No forms, no portals, no jargon — designed for an older
+        demographic first, not as an afterthought.</li>
+    <li><b>Aria introduces herself first</b> — name, purpose, and a promise: everything stays
+        private, and nothing is filed without your explicit say-so.</li>
+    <li><b>The agent does the hard part:</b> matches the story to the plan's own clinical
+        policy criteria and drafts the argument with the highest chance of overturn.</li>
+    <li><b>Evidence-linked, not vibes:</b> every drafted argument cites the specific policy
+        criteria the denial fails to satisfy.</li>
+    <li><b>ElevenLabs voice</b> is the interface itself — for a caller who can't manage forms,
+        voice isn't a feature, it's the door.</li>
+  </ul>
+</section>
+
+<section class="slide" id="s4">
+  <h2>How it works</h2>
+  <div class="grid">
+    <div class="box"><h3>1 · Meet Aria</h3><p>She introduces herself, explains she's on your side,
+      and asks for your name.</p></div>
+    <div class="box"><h3>2 · Tell your story</h3><p>One question at a time: your ID, the service,
+      the date, the reason in the letter.</p></div>
+    <div class="box"><h3>3 · She checks the policy</h3><p>Your story is matched against clinical
+      policy criteria — the plan's own rules.</p></div>
+    <div class="box"><h3>4 · She drafts, you decide</h3><p>Aria reads the appeal back to you.
+      Say "file it" — or ask for changes. Nothing moves without your voice.</p></div>
+  </div>
+</section>
+
+<section class="slide" id="s5">
+  <h2>The safety design</h2>
+  <ul>
+    <li><b>She refuses to file a weak appeal.</b> If the policy doesn't support overturning,
+        Aria says so plainly and files nothing — no wasted 60-day window on a doomed appeal.</li>
+    <li><b>Read-back before filing.</b> The entire appeal is spoken aloud for approval.
+        "File it" is the only trigger; anything else holds.</li>
+    <li><b>Say "stop" at any time.</b> It works at any point in the conversation, immediately.</li>
+    <li><b>Append-only audit trail.</b> Every step — question asked, policy matched, refusal,
+        filing — is logged and inspectable.</li>
+    <li><b>Honest evidence:</b> run counts show drafted / refused / filed out of total sessions.
+        No invented success rates.</li>
+  </ul>
+</section>
+
+<section class="slide" id="s6">
+  <h2>Live demo — three real scenarios</h2>
+  <div class="grid">
+    <div class="box"><h3>Heart CT scan</h3><p>Denied "not medically necessary — stress test first."
+      But a prior stress test was inconclusive and the patient can't exercise. CPB 0228 says that's
+      exactly when CCTA is indicated.</p></div>
+    <div class="box"><h3>Extra physical therapy</h3><p>Denied at a "session cap." CPB 0325 says
+      therapy is medically necessary to restore function after surgery — and two falls last month
+      with documented balance
+      deficits meets them.</p></div>
+    <div class="box"><h3>Power wheelchair</h3><p>Denied because "a scooter is enough." She can't
+      transfer safely and has hand tremors — CPB 0271 says that's exactly when a
+      power wheelchair is indicated.</p></div>
+  </div>
+  <p style="margin-top:26px">In each case: the plan's denial contradicts the plan's own policy.
+     That's the argument Aria finds and files.</p>
+</section>
+
+<section class="slide" id="s7">
+  <h2>Built with Mel — what Mel did</h2>
+  <ul>
+    <li>Designed and wrote the full stack: policy knowledge base, agent state machine,
+        audit store, HTTP API, and the senior-friendly voice UI.</li>
+    <li>Wrote and ran the test suite — including the refusal and failure paths.</li>
+    <li>Debugged live: PDF policy extraction, Windows shell quirks, API verification.</li>
+  </ul>
+  <p style="margin-top:26px">Zero third-party runtime dependencies — Python stdlib only,
+     so the demo runs anywhere with <code>python server.py</code>.</p>
+</section>
+
+<section class="slide" id="s8">
+  <h2>Honest limits</h2>
+  <ul>
+    <li>Policy criteria are <b>verbatim excerpts from real Aetna Clinical Policy Bulletins</b>
+        (CPB 0228, 0325, 0271), fetched from Aetna's public clinical-policy pages. This is demo
+        content, not clinical or legal advice.</li>
+    <li>Three scenarios in the demo library; real deployment needs the full CPB set.</li>
+    <li>An appeal is not an approval: we measure drafts and filings, not overturns.
+        Overturn rates cited here are published industry figures, not our measured results.</li>
+  </ul>
+</section>
+
+<section class="slide" id="s9">
+  <h2>AppealMate</h2>
+  <p class="big-quote">The most winnable fight is the one you almost didn't start.</p>
+  <p>Try it: <b>http://localhost:8080</b> — press the button, say hello to Aria.</p>
+  <p style="color:var(--soft)">Miami AI Hackathon 2026 · Built with Mel · Voice by ElevenLabs</p>
+</section>
+
+<div class="counter" id="counter">1 / 9</div>
+<div class="hintline">← → or click to navigate</div>
+<div class="nav">
+  <button onclick="go(-1)">&#8592; Back</button>
+  <button onclick="go(1)">Next &#8594;</button>
+</div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let i = 0;
+  function show(n) {
+    slides[i].classList.remove('active');
+    i = (n + slides.length) % slides.length;
+    slides[i].classList.add('active');
+    document.getElementById('counter').textContent = (i+1) + ' / ' + slides.length;
+  }
+  function go(d) { show(i + d); }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') go(1);
+    if (e.key === 'ArrowLeft') go(-1);
+  });
+  document.addEventListener('click', e => {
+    if (e.target.closest('.nav')) return;
+    go(1);
+  });
+</script>
+</body>
+</html>
