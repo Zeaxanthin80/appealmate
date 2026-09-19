@@ -29,8 +29,20 @@ shown as captions).
 
 ```bash
 cd appealmate
-python -m unittest test_appealmate -v
+python run_tests.py
 ```
+
+## Deploy to Vercel
+
+The repo is Vercel-ready. `api/index.py` is a WSGI adapter serving the same endpoint as `server.py`, and `vercel.json` routes everything to it.
+
+1. Go to `vercel.com/new` and sign in with GitHub.
+2. **Import** the `Zeaxanthin80/appealmate` repository.
+3. Framework preset: **Other**. Leave build/output commands empty — Vercel detects `api/index.py` as a Python function.
+4. Add env var `ELEVENLABS_API_KEY` (optional — without it the app shows captions instead of audio).
+5. Deploy. Every push to `main` redeploys automatically.
+
+**Serverless caveats, stated plainly:** Vercel's filesystem is read-only except `/tmp`, so the SQLite database lives at `/tmp/appealmate.db` — per-instance and lost on cold start, so audit history and run counts reset. Fine for a demo; for durable audit records swap `store.py` to hosted Postgres (Vercel Postgres, Supabase, Neon). Sessions are stored in the database rather than memory because each request is its own invocation. Run `python verify_vercel_adapter.py` to check the serverless entry point locally.
 
 ## The three demo scenarios (arbitrary denials for presentation)
 

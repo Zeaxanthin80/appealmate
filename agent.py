@@ -55,6 +55,40 @@ class Session:
 
 SESSIONS: dict[str, Session] = {}
 
+# In-memory cache. On a serverless host each request may land in a fresh
+# process, so the database is the source of truth and this is only a fast path.
+
+
+def _to_payload(s: Session) -> dict:
+    return {"session_id": s.session_id, "state": s.state, "cursor": s.cursor,
+            "data": s.data, "story": s.story, "scenario_id": s.scenario_id,
+            "steps": [asdict(x) for x in s.steps], "created": s.created}
+
+
+def _from_payload(p: dict) -> Session:
+    s = Session(session_id=p["session_id"], state=p.get("state", "intro"),
+                cursor=p.get("cursor", 0), data=p.get("data", {}),
+                story=p.get("story", ""), scenario_id=p.get("scenario_id"),
+                created=p.get("created", time.time()))
+    s.steps = [Step(**x) for x in p.get("steps", [])]
+    return s
+
+
+def _save(s: Session) -> None:
+    SESSIONS[s.session_id] = s
+    store.save_session(s.session_id, _to_payload(s))
+
+
+def _load(sid: str) -> Session | None:
+    if sid in SESSIONS:
+        return SESSIONS[sid]
+    p = store.load_session(sid)
+    if not p:
+        return None
+    s = _from_payload(p)
+    SESSIONS[sid] = s
+    return s
+
 
 def _log(s: Session, tool: str, status: str, detail: str) -> None:
     s.steps.append(Step(tool, status, detail))
@@ -64,7 +98,7 @@ def _log(s: Session, tool: str, status: str, detail: str) -> None:
 def start_session() -> dict:
     sid = "s-%d" % int(time.time() * 1000)
     s = Session(session_id=sid)
-    SESSIONS[sid] = s
+    _save(s)
     store.log_audit("agent", "session_start", sid, {"intro": True})
     return {"session_id": sid, "state": s.state,
             "say": voice.speak(INTRO), "transcript": INTRO}
@@ -88,7 +122,17 @@ def _next_question(s: Session, fid: str) -> dict:
 
 def send(sid: str, user_text: str) -> dict:
     """Main conversational turn. Returns what Aria says next."""
+    result = _send_inner(sid, user_text)
+    # Persist whatever the turn produced, so the next request — which may land
+    # in a different serverless instance — resumes from the same state.
     s = SESSIONS.get(sid)
+    if s is not None:
+        _save(s)
+    return result
+
+
+def _send_inner(sid: str, user_text: str) -> dict:
+    s = _load(sid)
     if not s:
         return {"error": "unknown session"}
 
@@ -208,7 +252,7 @@ def generate_form(s: Session) -> dict:
 
 
 def get_session(sid: str) -> dict | None:
-    s = SESSIONS.get(sid)
+    s = _load(sid)
     if not s:
         return None
     return {"session_id": s.session_id, "state": s.state, "data": s.data,

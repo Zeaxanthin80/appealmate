@@ -1,12 +1,27 @@
-"""AppealMate — persistence. SQLite + append-only audit log + run counts."""
+"""AppealMate — persistence. SQLite + append-only audit log + run counts + sessions."""
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import time
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "appealmate.db"
+
+def _db_path() -> Path:
+    """Where the database lives.
+
+    Serverless hosts (Vercel, Lambda) mount the project read-only, so a database
+    beside the source cannot be written. /tmp is writable there but is
+    per-instance and ephemeral — fine for a demo, not for durability. Locally we
+    keep the file next to the source so state survives a restart.
+    """
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return Path("/tmp/appealmate.db")
+    return Path(__file__).parent / "appealmate.db"
+
+
+DB_PATH = _db_path()
 
 AUDIT_SCHEMA = """
 CREATE TABLE IF NOT EXISTS audit_log (
@@ -23,6 +38,11 @@ CREATE TABLE IF NOT EXISTS runs (
     app TEXT NOT NULL,
     outcome TEXT NOT NULL,
     session_id TEXT
+);
+CREATE TABLE IF NOT EXISTS sessions (
+    session_id TEXT PRIMARY KEY,
+    updated REAL NOT NULL,
+    payload TEXT NOT NULL
 );
 """
 
@@ -78,3 +98,26 @@ def run_counts() -> dict:
     counts = {r["outcome"]: r["n"] for r in rows}
     total = sum(counts.values())
     return {"total": total, **counts}
+
+
+# --- session persistence -------------------------------------------------
+# Serverless invocations do not share memory, so an in-memory session dict
+# loses the conversation between requests. Sessions are stored as JSON.
+
+def save_session(session_id: str, payload: dict) -> None:
+    conn = _connect()
+    conn.execute(
+        "INSERT OR REPLACE INTO sessions (session_id, updated, payload) VALUES (?, ?, ?)",
+        (session_id, time.time(), json.dumps(payload)),
+    )
+    conn.commit()
+    conn.close()
+
+
+def load_session(session_id: str) -> dict | None:
+    conn = _connect()
+    row = conn.execute(
+        "SELECT payload FROM sessions WHERE session_id = ?", (session_id,)
+    ).fetchone()
+    conn.close()
+    return json.loads(row["payload"]) if row else None
