@@ -15,9 +15,21 @@ import urllib.request
 
 
 TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-# Sarah — "Mature, Reassuring, Confident", female American. Chosen because the
-# caller is often an anxious older adult; a calm, mature voice reads as credible.
-DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"
+# Bella — "Professional, Bright, Warm", female American, middle-aged.
+# The previous default was Sarah, who read as hesitant: labelled "Mature,
+# Reassuring", but her delivery is slow and tentative, which made Aria sound
+# unsure of herself. A member being told their appeal is winnable needs to hear
+# someone who sounds certain. Bella is professional, warm and level.
+DEFAULT_VOICE = "hpp4J3VqNfWAUOO0d1Us"
+
+# Delivery settings. Higher stability keeps the read even and assured rather
+# than wandering; a little style keeps it from sounding robotic.
+VOICE_SETTINGS = {
+    "stability": 0.5,
+    "similarity_boost": 0.75,
+    "style": 0.15,
+    "use_speaker_boost": True,
+}
 
 
 def speak(text: str, voice_id: str | None = None) -> dict:
@@ -31,7 +43,8 @@ def speak(text: str, voice_id: str | None = None) -> dict:
     try:
         req = urllib.request.Request(
             TTS_URL.format(voice_id=voice_id or DEFAULT_VOICE),
-            data=json.dumps({"text": text, "model_id": "eleven_turbo_v2_5"}).encode(),
+            data=json.dumps({"text": text, "model_id": "eleven_turbo_v2_5",
+                             "voice_settings": VOICE_SETTINGS}).encode(),
             headers={"xi-api-key": api_key, "Content-Type": "application/json"},
             method="POST",
         )

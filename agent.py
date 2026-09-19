@@ -28,12 +28,15 @@ import store
 import voice
 
 
-# The introduction Aria speaks first. Warm, safe, on the caller's side.
+# The introduction Aria speaks first. Confident and warm, not tentative: the
+# member has just been told their care is denied, and they need to hear someone
+# who sounds certain they can help. The safety promise is still here, stated
+# plainly rather than hedged.
 INTRO = (
-    "Hello! I'm Aria, your health-insurance appeal assistant. I'm here to help "
-    "you fight a denial, and everything you tell me stays between us. We'll take "
-    "this one step at a time, and I'll only file your appeal when you say you're "
-    "ready. You can tell me to stop at any moment. What's your name?"
+    "Hello, I'm Aria. I help people appeal health insurance denials, and I'm "
+    "good at it. Tell me what was denied, and I'll find the rule your plan "
+    "overlooked and write your appeal for you. I won't file anything until you "
+    "tell me to. Let's start — what's your name?"
 )
 
 # Fields Aria asks about, in order. The two on the ID card and the member's own

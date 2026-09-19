@@ -2,244 +2,396 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AppealMate — Your Appeal Assistant</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>AppealMate — Appeal your health insurance denial</title>
 <style>
   :root {
-    --ink:#1a2340; --soft:#5a6480; --line:#d9dfec; --bg:#f4f6fb;
-    --accent:#1d4ed8; --accent-soft:#e8eefc; --ok:#15803d; --warn:#b45309; --bad:#b91c1c;
+    --ink:#0b2b3c; --ink-soft:#41647a; --muted:#7d99a9;
+    --teal:#0e8f8f; --teal-dark:#0a6e6e; --blue:#1a6fa8;
+    --bg1:#eef7f8; --bg2:#dceef4;
+    --white:#ffffff; --line:#d3e5ea;
+    --ok:#0f8f5b; --warn:#c2760a; --bad:#c0392b;
+    --shadow: 0 10px 30px rgba(11,43,60,.10);
+    --shadow-lg: 0 24px 60px rgba(11,43,60,.16);
   }
-  * { box-sizing:border-box; -webkit-text-size-adjust:100%; }
-  body { margin:0; font-family: Georgia, "Times New Roman", serif; background:var(--bg); color:var(--ink); }
-  .shell { max-width:900px; margin:0 auto; padding:18px 16px 60px; }
+  * { box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent; }
+  html, body { height:100%; overflow:hidden; }
+  body {
+    font-family:"Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, Helvetica, Arial, sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1100px 600px at 12% -10%, #ffffff 0%, rgba(255,255,255,0) 60%),
+      radial-gradient(900px 500px at 100% 110%, #cfe9ef 0%, rgba(207,233,239,0) 55%),
+      linear-gradient(160deg, var(--bg1), var(--bg2));
+    display:flex; flex-direction:column;
+  }
 
-  header { display:flex; align-items:center; gap:14px; padding:10px 0 18px; }
-  .logo { width:54px; height:54px; border-radius:50%; background:var(--accent); color:#fff;
-          display:flex; align-items:center; justify-content:center; font-size:28px; }
-  header h1 { font-size:26px; margin:0; }
-  header p { margin:2px 0 0; color:var(--soft); font-size:16px; }
+  header { flex:0 0 auto; display:flex; align-items:center; gap:14px; padding:18px clamp(18px,3vw,40px); }
+  .mark {
+    width:44px; height:44px; border-radius:13px; flex:0 0 auto;
+    background:linear-gradient(145deg, var(--teal), var(--blue));
+    display:grid; place-items:center; box-shadow:var(--shadow);
+  }
+  .mark svg { width:24px; height:24px; }
+  .brand { font-size:19px; font-weight:700; letter-spacing:-.2px; }
+  .brand span { color:var(--teal); }
+  .tagline { font-size:13px; color:var(--muted); margin-top:1px; }
+  .spacer { flex:1; }
+  .ghost {
+    border:1.5px solid var(--line); background:rgba(255,255,255,.7); color:var(--ink-soft);
+    font:inherit; font-size:14px; font-weight:600; padding:9px 16px; border-radius:11px; cursor:pointer;
+    transition:.15s;
+  }
+  .ghost:hover { background:#fff; color:var(--teal-dark); border-color:var(--teal); }
 
-  .card { background:#fff; border:1px solid var(--line); border-radius:16px; padding:22px; }
+  .stage { flex:1 1 auto; min-height:0; display:grid; grid-template-rows:auto 1fr auto;
+           padding:0 clamp(18px,3vw,40px) 20px; gap:12px; }
 
-  /* The conversation: large text, high contrast */
-  #convo { min-height:180px; }
-  .msg { font-size:21px; line-height:1.55; margin:0 0 14px; }
-  .msg.aria { color:var(--ink); }
-  .msg.you { color:var(--soft); font-style:italic; }
-  .msg .who { font-size:14px; font-family:Arial, sans-serif; letter-spacing:.4px;
-              text-transform:uppercase; color:var(--accent); display:block; margin-bottom:2px; }
+  .statusbar { display:flex; justify-content:center; }
+  .pill {
+    display:inline-flex; align-items:center; gap:8px;
+    background:rgba(255,255,255,.82); border:1px solid var(--line);
+    padding:7px 16px; border-radius:999px; font-size:13.5px; font-weight:600; color:var(--ink-soft);
+    box-shadow:0 3px 12px rgba(11,43,60,.06);
+  }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--muted); }
+  .pill.ready .dot { background:var(--teal); }
+  .pill.thinking .dot { background:var(--warn); animation:blink 1s infinite; }
+  .pill.done .dot { background:var(--ok); }
+  .pill.stop .dot { background:var(--bad); }
+  @keyframes blink { 50% { opacity:.25 } }
 
-  /* One big control at a time */
-  .controls { display:flex; flex-direction:column; gap:14px; margin-top:18px; }
-  button.big { font-family:Georgia, serif; font-size:24px; padding:20px 26px; border-radius:14px;
-               border:none; cursor:pointer; background:var(--accent); color:#fff; }
-  button.big:hover { background:#1e40af; }
-  button.big.listening { background:var(--bad); animation:pulse 1.2s infinite; }
-  button.big.secondary { background:#fff; color:var(--accent); border:3px solid var(--accent); }
-  button.big:disabled { opacity:.45; cursor:default; }
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.75} }
-  .hint { font-size:16px; color:var(--soft); text-align:center; font-family:Arial, sans-serif; }
+  .center { min-height:0; display:flex; flex-direction:column; align-items:center;
+            justify-content:center; gap:clamp(12px,2.2vh,24px); }
 
-  /* Live transcript of what the caller says */
-  #live { min-height:34px; font-size:19px; color:var(--soft); font-style:italic;
-          border-bottom:2px solid var(--line); padding:6px 2px; margin-top:4px; }
+  .say {
+    width:min(820px, 94vw);
+    background:var(--white); border:1px solid var(--line); border-radius:20px;
+    box-shadow:var(--shadow); padding:clamp(16px,2.4vh,26px) clamp(20px,3vw,34px);
+    max-height:min(30vh, 250px); overflow:auto;
+  }
+  .who {
+    display:flex; align-items:center; gap:8px;
+    font-size:12px; font-weight:700; letter-spacing:.10em; text-transform:uppercase;
+    color:var(--teal); margin-bottom:9px;
+  }
+  .who i { width:7px; height:7px; border-radius:50%; background:var(--teal); display:block; }
+  .say p { font-size:clamp(17px,2.1vh,20px); line-height:1.55; color:var(--ink); }
+  .say.empty p { color:var(--muted); }
 
-  .status-row { display:flex; gap:10px; align-items:center; margin-top:16px; flex-wrap:wrap; }
-  .pill { background:var(--accent-soft); color:var(--accent); font-family:Arial,sans-serif;
-          font-size:14px; padding:6px 14px; border-radius:99px; }
-  .pill.ok { background:#dcfce7; color:var(--ok); }
-  .pill.warn { background:#fef3c7; color:var(--warn); }
-  .pill.bad { background:#fee2e2; color:var(--bad); }
+  .talkwrap { position:relative; display:grid; place-items:center; }
+  .ring {
+    position:absolute; width:clamp(190px,30vh,260px); height:clamp(190px,30vh,260px);
+    border-radius:50%; border:2px solid var(--teal); opacity:0; pointer-events:none;
+  }
+  .listening .ring { animation:ripple 1.9s ease-out infinite; }
+  .listening .ring:nth-child(2) { animation-delay:.65s; }
+  @keyframes ripple { 0% { transform:scale(.82); opacity:.55 } 100% { transform:scale(1.5); opacity:0 } }
 
-  details { margin-top:18px; font-family:Arial, sans-serif; }
-  summary { cursor:pointer; font-size:16px; color:var(--soft); }
-  details pre { background:var(--ink); color:#e6ecff; padding:14px; border-radius:10px;
-                font-size:12px; overflow:auto; }
+  #talk {
+    position:relative; z-index:2;
+    width:clamp(160px,26vh,220px); height:clamp(160px,26vh,220px); border-radius:50%;
+    border:none; cursor:pointer; color:#fff;
+    background:linear-gradient(150deg, var(--teal) 0%, var(--blue) 100%);
+    box-shadow:var(--shadow-lg), inset 0 -6px 18px rgba(0,0,0,.14);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px;
+    transition:transform .14s ease, box-shadow .2s ease, filter .2s;
+  }
+  #talk:hover { transform:translateY(-3px) scale(1.015); }
+  #talk:active { transform:scale(.965); }
+  #talk svg { width:clamp(38px,6.5vh,54px); height:clamp(38px,6.5vh,54px); }
+  #talk .lbl { font-size:clamp(14px,1.9vh,17px); font-weight:700; }
+  #talk.listening { background:linear-gradient(150deg, #d64545 0%, #a52f2f 100%); }
+  #talk:disabled { filter:grayscale(.5); opacity:.6; cursor:default; transform:none; }
 
-  footer { margin-top:26px; font-size:14px; color:var(--soft); font-family:Arial,sans-serif;
-           line-height:1.5; }
+  .hint { font-size:14.5px; color:var(--muted); text-align:center; }
+  #live { min-height:24px; font-size:16px; font-style:italic; color:var(--teal-dark);
+          text-align:center; max-width:min(760px,92vw); }
+  #typed { display:none; width:min(660px,92vw); font:inherit; font-size:17px;
+           padding:14px 16px; border-radius:13px; border:1.5px solid var(--line); background:#fff; }
+  #typed:focus { outline:2px solid var(--teal); border-color:transparent; }
+
+  footer { flex:0 0 auto; text-align:center; font-size:12.5px; color:var(--muted);
+           padding:6px 20px 16px; line-height:1.5; }
+  footer a { color:var(--teal-dark); }
+
+  .scrim { position:fixed; inset:0; background:rgba(11,43,60,.42); opacity:0; pointer-events:none;
+           transition:.25s; z-index:40; }
+  .scrim.on { opacity:1; pointer-events:auto; }
+  .drawer {
+    position:fixed; top:0; right:0; height:100%; width:min(560px,94vw); z-index:50;
+    background:var(--white); box-shadow:-20px 0 60px rgba(11,43,60,.22);
+    transform:translateX(102%); transition:transform .3s cubic-bezier(.4,0,.2,1);
+    display:flex; flex-direction:column;
+  }
+  .drawer.on { transform:none; }
+  .drawer header { padding:18px 22px; border-bottom:1px solid var(--line); }
+  .drawer h2 { font-size:16px; font-weight:700; }
+  .drawer .body { flex:1; overflow:auto; padding:20px 22px 28px; }
+
+  .turn { margin-bottom:15px; }
+  .turn .who2 { font-size:11.5px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+                color:var(--muted); margin-bottom:3px; }
+  .turn.you .who2 { color:var(--blue); }
+  .turn p { font-size:15.5px; line-height:1.5; }
+  .turn.you p { color:var(--ink-soft); font-style:italic; }
+
+  .frow { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid #eef4f6; font-size:14.5px; }
+  .frow .k { width:38%; font-weight:600; color:var(--ink-soft); }
+  .frow .k em { display:block; font-style:normal; font-size:11.5px; font-weight:700; margin-top:2px; }
+  .frow .k em.req { color:var(--bad); }
+  .frow .k em.opt { color:var(--muted); }
+  .frow .v.blank { color:var(--warn); font-style:italic; }
+  .banner { border-radius:11px; padding:12px 14px; font-size:14px; font-weight:600; margin-bottom:14px; }
+  .banner.ok { background:#e7f7ef; color:var(--ok); }
+  .banner.bad { background:#fdecea; color:var(--bad); }
+  pre.trace { background:#0b2b3c; color:#cfe6ee; border-radius:12px; padding:14px;
+              font-size:11.5px; line-height:1.55; overflow:auto; max-height:46vh; }
+  .tabs { display:flex; gap:6px; padding:0 22px; border-bottom:1px solid var(--line); }
+  .tab { border:none; background:none; font:inherit; font-size:14px; font-weight:600; color:var(--muted);
+         padding:12px 4px; margin-right:16px; border-bottom:2.5px solid transparent; cursor:pointer; }
+  .tab.on { color:var(--teal-dark); border-color:var(--teal); }
+  .pane { display:none; } .pane.on { display:block; }
+
+  @media (max-height:620px) {
+    .say { max-height:24vh; }
+    .tagline { display:none; }
+    #talk .lbl { font-size:13px; }
+  }
 </style>
 </head>
 <body>
-<div class="shell">
-  <header>
-    <div class="logo">&#9829;</div>
-    <div>
-      <h1>AppealMate</h1>
-      <p>Talk to Aria. She helps you appeal an insurance denial.</p>
+
+<header>
+  <div class="mark" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 21s-7-4.4-7-9.4A4 4 0 0 1 12 8a4 4 0 0 1 7 3.6c0 5-7 9.4-7 9.4z"/>
+      <path d="M3 12h3l1.5-2.5L10 15l2-4.5L13.5 13H21"/>
+    </svg>
+  </div>
+  <div>
+    <div class="brand">Appeal<span>Mate</span></div>
+    <div class="tagline">Your insurance appeal, handled by voice</div>
+  </div>
+  <div class="spacer"></div>
+  <button class="ghost" id="openDrawer">Your appeal</button>
+  <button class="ghost" id="restart">Start over</button>
+</header>
+
+<main class="stage">
+  <div class="statusbar">
+    <span class="pill" id="status"><span class="dot"></span><span id="statusText">Ready when you are</span></span>
+  </div>
+
+  <div class="center">
+    <section class="say empty" id="sayBox" aria-live="polite">
+      <div class="who"><i></i>Aria</div>
+      <p id="sayText">Tap the button and tell me what was denied. I'll find the rule your plan overlooked and write your appeal.</p>
+    </section>
+
+    <div class="talkwrap" id="talkwrap">
+      <span class="ring"></span><span class="ring"></span>
+      <button id="talk" aria-label="Press to talk">
+        <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="2" width="6" height="12" rx="3"/>
+          <path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18.5V22"/><path d="M8.5 22h7"/>
+        </svg>
+        <span class="lbl">Press to talk</span>
+      </button>
     </div>
+
+    <div id="live"></div>
+    <input id="typed" placeholder="Type your answer, then press Enter" autocomplete="off">
+    <div class="hint" id="hint">Your words stay on this device. Nothing is filed until you say so.</div>
+  </div>
+</main>
+
+<footer>
+  Demonstration for the Miami AI Hackathon. Policy criteria are verbatim excerpts from real
+  Aetna Clinical Policy Bulletins (CPB 0228, 0325, 0271) — not clinical or legal advice.
+  &nbsp;·&nbsp; <a href="/slides">Presentation deck</a>
+</footer>
+
+<div class="scrim" id="scrim"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <header style="display:flex;align-items:center;gap:12px">
+    <h2>Your appeal</h2>
+    <div class="spacer"></div>
+    <button class="ghost" id="closeDrawer">Close</button>
   </header>
-
-  <section class="card">
-    <div id="convo" aria-live="polite">
-      <p class="msg aria"><span class="who">Aria</span>
-        Press the big blue button and say hello. I'll walk you through everything, one step at a time.</p>
+  <div class="tabs">
+    <button class="tab on" data-pane="paneForm">Form</button>
+    <button class="tab" data-pane="paneTurns">Conversation</button>
+    <button class="tab" data-pane="paneAudit">Agent's work</button>
+  </div>
+  <div class="body">
+    <div class="pane on" id="paneForm">
+      <p style="color:var(--muted);font-size:14.5px">Your appeal form fills in as we talk. The Comments field holds your argument.</p>
     </div>
-    <div id="live">&nbsp;</div>
-
-    <div class="controls">
-      <button class="big" id="talk">&#127908; Press to talk</button>
-      <button class="big secondary" id="restart" style="display:none">Start over</button>
-      <p class="hint">Your words stay on this device. Nothing is filed until you say so.</p>
-    </div>
-
-    <div class="status-row">
-      <span class="pill" id="state">not started</span>
-      <span class="pill" id="voice" style="display:none">voice</span>
-    </div>
-
-    <details>
-      <summary>Show the agent's work (audit trail)</summary>
-      <pre id="trace">—</pre>
-    </details>
-  </section>
-
-  <footer>
-    AppealMate is a demonstration built for the Miami AI Hackathon. Policy criteria are verbatim
-    excerpts from real Aetna Clinical Policy Bulletins (CPB 0228, 0325, 0271). This is not
-    clinical or legal advice.
-    <br><a href="/slides">View the presentation deck &rarr;</a>
-  </footer>
-</div>
+    <div class="pane" id="paneTurns"></div>
+    <div class="pane" id="paneAudit"><pre class="trace">—</pre></div>
+  </div>
+</aside>
 
 <script>
   const $ = id => document.getElementById(id);
-  const convo = $('convo'), live = $('live'), talkBtn = $('talk');
-  let sessionId = null, busy = false, recognizer = null, listening = false;
+  const talk = $('talk'), sayText = $('sayText'), sayBox = $('sayBox'), live = $('live');
+  const statusEl = $('status'), statusText = $('statusText'), typed = $('typed');
+  let sid = null, busy = false, rec = null, listening = false;
+  let turnCount = 0;
 
-  function addMsg(who, text) {
-    const p = document.createElement('p');
-    p.className = 'msg ' + (who === 'Aria' ? 'aria' : 'you');
-    p.innerHTML = '<span class="who">' + who + '</span>' + escapeHtml(text);
-    convo.appendChild(p);
-    convo.scrollTop = convo.scrollHeight;
+  const esc = s => String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function setStatus(text, kind) {
+    statusText.textContent = text;
+    statusEl.className = 'pill' + (kind ? ' ' + kind : '');
   }
-  function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
-  function setState(label, cls) {
-    const el = $('state');
-    el.textContent = label; el.className = 'pill' + (cls ? ' ' + cls : '');
+  function ariaSays(text, empty) {
+    sayText.textContent = text;
+    sayBox.classList.toggle('empty', !!empty);
+    if (text) pushTurn('Aria', text);
   }
-
+  function pushTurn(who, text) {
+    turnCount++;
+    const d = document.createElement('div');
+    d.className = 'turn' + (who === 'You' ? ' you' : '');
+    d.innerHTML = '<div class="who2">' + who + '</div><p>' + esc(text) + '</p>';
+    $('paneTurns').appendChild(d);
+  }
   async function api(path, opts) { const r = await fetch(path, opts); return r.json(); }
 
-  function playAudio(res) {
-    if (res.say && res.say.audio_b64) {
-      try {
-        const audio = new Audio('data:audio/mpeg;base64,' + res.say.audio_b64);
-        audio.play().catch(()=>{});
-      } catch(e) {}
+  function play(say) {
+    if (say && say.audio_b64) {
+      try { new Audio('data:audio/mpeg;base64,' + say.audio_b64).play().catch(() => {}); } catch (e) {}
     }
   }
 
-  async function start() {
-    busy = true;
-    const res = await api('/api/session', {method:'POST'});
-    sessionId = res.session_id;
-    addMsg('Aria', res.transcript);
-    playAudio(res);
-    setState('listening for you', 'ok');
+  async function begin() {
+    busy = true; setStatus('Connecting…', 'thinking');
+    try {
+      const r = await api('/api/session', {method:'POST'});
+      sid = r.session_id;
+      ariaSays(r.transcript);
+      play(r.say);
+      setStatus('Listening for you', 'ready');
+    } catch (e) {
+      setStatus('Could not connect — tap to retry', 'stop');
+    }
     busy = false;
   }
 
-  async function say(text) {
-    if (busy || !sessionId) return;
+  async function tell(text) {
+    if (busy || !sid || !text.trim()) return;
     busy = true;
-    addMsg('You', text);
-    setState('thinking\u2026', 'warn');
-    const res = await api('/api/session/' + sessionId + '/say', {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({text})
-    });
-    addMsg('Aria', res.transcript);
-    playAudio(res);
-    if (res.refused) setState('no appeal filed \u2014 told you why', 'bad');
-    else if (res.state === 'filed') { setState('appeal filed \u2713', 'ok'); showForm(res.form); }
-    else if (res.state === 'drafted') setState('draft ready \u2014 say \u201cfile it\u201d to send', 'warn');
-    else if (res.state === 'stopped') setState('stopped \u2014 nothing filed', 'bad');
-    else setState('listening for you', 'ok');
-    refreshTrace();
+    pushTurn('You', text);
+    sayText.textContent = '…';
+    setStatus('Working on it', 'thinking');
+    try {
+      const r = await api('/api/session/' + sid + '/say', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({text})
+      });
+      ariaSays(r.transcript);
+      play(r.say);
+      if (r.refused) setStatus('No appeal filed — I explained why', 'stop');
+      else if (r.state === 'filed') { setStatus('Appeal filed', 'done'); showForm(r.form); openDrawer(); }
+      else if (r.state === 'drafted') setStatus('Draft ready — say "file it"', 'ready');
+      else if (r.state === 'stopped') setStatus('Stopped — nothing filed', 'stop');
+      else setStatus('Listening for you', 'ready');
+      refresh();
+    } catch (e) {
+      setStatus('Connection problem — try again', 'stop');
+    }
     busy = false;
   }
 
   function showForm(form) {
-    const box = document.createElement('details');
-    box.open = true;
-    let rows = form.fields.map(f => {
-      const val = f.value ? escapeHtml(f.value)
-                          : '<span style="color:#b45309">Not provided — the plan will fill this in</span>';
-      const req = f.required
-        ? '<b style="color:#b91c1c">Required</b>'
-        : '<span style="color:#64748b">Optional</span>';
-      return '<tr><td style="width:32%"><b>' + escapeHtml(f.label) + '</b><br>' + req +
-             '</td><td>' + val + '</td></tr>';
+    const rows = form.fields.map(f => {
+      const v = f.value ? esc(f.value)
+        : '<span class="v blank">Not provided — the plan will fill this in</span>';
+      const tag = f.required ? '<em class="req">Required</em>' : '<em class="opt">Optional</em>';
+      return '<div class="frow"><div class="k">' + esc(f.label) + tag + '</div><div>' + v + '</div></div>';
     }).join('');
-    const warn = form.missing_required && form.missing_required.length
-      ? '<p style="color:#b91c1c"><b>Still needed before signing:</b> ' +
-        escapeHtml(form.missing_required.join(', ')) + '</p>'
-      : '<p style="color:#15803d"><b>All required fields are complete.</b></p>';
-    box.innerHTML =
-      '<summary>Appeal form — confirmation ' + escapeHtml(form.confirmation) + '</summary>' +
-      warn +
-      '<table style="width:100%;font-size:16px;font-family:Arial">' + rows + '</table>' +
-      '<p style="font-size:14px;color:#5a6480">The <b>Comments</b> field holds your argument. ' +
-      'Review it, then print or read it to your plan.</p>';
-    convo.appendChild(box);
+    const banner = (form.missing_required && form.missing_required.length)
+      ? '<div class="banner bad">Still needed before signing: ' + esc(form.missing_required.join(', ')) + '</div>'
+      : '<div class="banner ok">All required fields are complete. Confirmation ' + esc(form.confirmation) + '.</div>';
+    $('paneForm').innerHTML = banner + rows;
   }
 
-  async function refreshTrace() {
-    if (!sessionId) return;
-    const s = await api('/api/session/' + sessionId);
-    $('trace').textContent = JSON.stringify(s.trace, null, 2);
+  async function refresh() {
+    if (!sid) return;
+    try {
+      const s = await api('/api/session/' + sid);
+      if (s && s.trace) {
+        $('paneAudit').innerHTML = '<pre class="trace">' + esc(JSON.stringify(s.trace, null, 2)) + '</pre>';
+      }
+    } catch (e) {}
   }
 
-  // ---- speech recognition (browser Web Speech API; captions shown live) ----
+  function openDrawer() { $('drawer').classList.add('on'); $('scrim').classList.add('on'); }
+  function closeDrawer() { $('drawer').classList.remove('on'); $('scrim').classList.remove('on'); }
+  $('openDrawer').onclick = openDrawer;
+  $('closeDrawer').onclick = closeDrawer;
+  $('scrim').onclick = closeDrawer;
+  $('restart').onclick = () => location.reload();
+  document.querySelectorAll('.tab').forEach(t => t.onclick = () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('on'));
+    document.querySelectorAll('.pane').forEach(x => x.classList.remove('on'));
+    t.classList.add('on'); $(t.dataset.pane).classList.add('on');
+  });
+
+  function useTyping() {
+    talk.parentNode.insertBefore(typed, talk.nextSibling);
+    typed.style.display = 'block';
+    typed.onkeydown = e => {
+      if (e.key === 'Enter' && typed.value.trim()) { tell(typed.value.trim()); typed.value = ''; }
+    };
+    $('hint').textContent = 'Type your answer and press Enter. Nothing is filed until you say so.';
+  }
+
   function initSpeech() {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { talkBtn.disabled = true; talkBtn.textContent = 'Typing mode — type below';
-               const t = document.createElement('input');
-               t.style.cssText = 'font-size:22px;padding:12px;width:100%;border-radius:10px;border:2px solid #d9dfec';
-               t.placeholder = 'Type your answer here, then press Enter';
-               t.onkeydown = e => { if (e.key === 'Enter' && t.value.trim()) { say(t.value.trim()); t.value=''; } };
-               talkBtn.parentNode.insertBefore(t, talkBtn.nextSibling);
-               return; }
-    recognizer = new SR();
-    recognizer.lang = 'en-US';
-    recognizer.interimResults = true;
-    recognizer.continuous = false;
-
-    recognizer.onresult = e => {
-      let final_text = '', interim = '';
+    if (!SR) return useTyping();
+    rec = new SR();
+    rec.lang = 'en-US'; rec.interimResults = true; rec.continuous = false;
+    rec.onresult = e => {
+      let fin = '', mid = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
-        if (r.isFinal) final_text += r[0].transcript; else interim += r[0].transcript;
+        if (r.isFinal) fin += r[0].transcript; else mid += r[0].transcript;
       }
-      live.textContent = interim || final_text;
-      if (final_text.trim()) { stopListening(); say(final_text.trim()); }
+      live.textContent = mid || fin;
+      if (fin.trim()) { stopListening(); tell(fin.trim()); }
     };
-    recognizer.onerror = e => { stopListening(); live.textContent = ' (' + e.error + ' — try again) '; };
-    recognizer.onend = () => { if (listening) stopListening(); };
+    rec.onerror = e => { stopListening(); live.textContent = '(' + e.error + ' — tap and try again)'; };
+    rec.onend = () => { if (listening) stopListening(); };
   }
 
   function stopListening() {
     listening = false;
-    try { recognizer.stop(); } catch(e) {}
-    talkBtn.classList.remove('listening');
-    talkBtn.innerHTML = '&#127908; Press to talk';
+    try { rec.stop(); } catch (e) {}
+    talk.classList.remove('listening');
+    $('talkwrap').classList.remove('listening');
+    talk.querySelector('.lbl').textContent = 'Press to talk';
   }
 
-  talkBtn.onclick = () => {
-    if (!sessionId) { start(); return; }
-    if (listening) { stopListening(); return; }
+  talk.onclick = () => {
+    if (!sid) return begin();
+    if (listening) return stopListening();
+    if (!rec) { typed.focus(); return; }
     listening = true;
-    live.textContent = 'Listening\u2026';
-    talkBtn.classList.add('listening');
-    talkBtn.textContent = 'Listening — speak now, tap to stop';
-    try { recognizer.start(); } catch(e) {}
+    live.textContent = 'Listening…';
+    talk.classList.add('listening');
+    $('talkwrap').classList.add('listening');
+    talk.querySelector('.lbl').textContent = 'Tap to stop';
+    try { rec.start(); } catch (e) {}
   };
 
-  $('restart').style.display = 'inline-block';
-  $('restart').onclick = () => { location.reload(); };
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeDrawer();
+    if (e.key === ' ' && e.target === document.body) { e.preventDefault(); talk.click(); }
+  });
 
   initSpeech();
 </script>

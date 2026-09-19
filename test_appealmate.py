@@ -145,11 +145,20 @@ class TestFullConversation(unittest.TestCase):
     def _say(self, text):
         return agent.send(self.sid, text)
 
-    def test_intro_is_safe_and_warm(self):
+    def test_intro_is_confident_and_promises_consent(self):
+        """The intro must sound certain, and still promise no filing without consent.
+
+        An earlier version said "we'll take this one step at a time" and "you can
+        tell me to stop at any moment" — accurate, but hesitant, which is the
+        opposite of what someone just denied needs to hear. The stop capability
+        is unchanged and is covered by test_stop_word_works_immediately.
+        """
         t = self.start["transcript"]
         self.assertIn("Aria", t)
         self.assertIn("your name", t)
-        self.assertTrue("stop" in t.lower())
+        self.assertIn("won't file", t)          # the consent promise
+        for hedge in ("one step at a time", "I'm sorry", "maybe", "I'll try"):
+            self.assertNotIn(hedge, t)
 
     def test_happy_path_collects_fields_and_drafts(self):
         r = self._say("Maria Fernandez")
