@@ -23,6 +23,7 @@ import hashlib
 import time
 from dataclasses import dataclass, field, asdict
 
+import argument
 import policies
 import store
 import voice
@@ -49,10 +50,6 @@ ASK_ORDER = ["member_name", "member_id", "service_denied"]
 # Optional questions asked after the required ones. Each is explicitly
 # skippable, and "I don't know" moves on without comment.
 OPTIONAL_ORDER = ["provider_requested", "was_denied"]
-
-# What the member says when they don't know. Matched loosely and on purpose —
-# people phrase this a dozen ways, and misreading it as a real answer is what
-# caused Aria to lose the thread of a real appeal.
 UNKNOWN_PHRASES = (
     "i don't know", "i dont know", "dont know", "don't know", "not sure",
     "i'm not sure", "im not sure", "no idea", "i have no idea", "no clue",
@@ -94,10 +91,15 @@ class Step:
 @dataclass
 class Session:
     session_id: str
-    state: str = "intro"   # intro -> asking -> clarifying -> drafted/refused -> filed/stopped
-    phase: str = "required"  # which question list: "required" then "optional"
+    state: str = "intro"
+    # Phases, in order: required questions -> optional questions -> the policy
+    # interview -> drafted/refused -> filed/stopped. "clarifying" is the single
+    # extra question asked when the story cannot be matched at all.
+    phase: str = "required"
     cursor: int = 0
     data: dict = field(default_factory=dict)
+    facts: dict = field(default_factory=dict)   # the patient's own answers
+    interview: list = field(default_factory=list)  # [(fact_id, question)]
     story: str = ""
     scenario_id: str | None = None
     clarifications: int = 0
@@ -117,7 +119,9 @@ SESSIONS: dict[str, Session] = {}
 def _to_payload(s: Session) -> dict:
     return {"session_id": s.session_id, "state": s.state, "phase": s.phase,
             "cursor": s.cursor,
-            "data": s.data, "story": s.story, "scenario_id": s.scenario_id,
+            "data": s.data, "facts": s.facts,
+            "interview": [list(x) for x in s.interview],
+            "story": s.story, "scenario_id": s.scenario_id,
             "clarifications": s.clarifications,
             "steps": [asdict(x) for x in s.steps], "created": s.created}
 
@@ -126,6 +130,8 @@ def _from_payload(p: dict) -> Session:
     s = Session(session_id=p["session_id"], state=p.get("state", "intro"),
                 phase=p.get("phase", "required"),
                 cursor=p.get("cursor", 0), data=p.get("data", {}),
+                facts=p.get("facts", {}),
+                interview=[tuple(x) for x in p.get("interview", [])],
                 story=p.get("story", ""), scenario_id=p.get("scenario_id"),
                 clarifications=p.get("clarifications", 0),
                 created=p.get("created", time.time()))
@@ -197,6 +203,15 @@ def _next_question(s: Session, fid: str) -> dict:
             "say": voice.speak(q), "transcript": q}
 
 
+def _ask_interview(s: Session) -> dict:
+    """Ask the next question from the policy interview."""
+    fid, q = s.interview[s.cursor]
+    s.state = "interview"
+    _log(s, "ask_fact", "ok", fid)
+    return {"session_id": s.session_id, "state": s.state, "field": fid,
+            "say": voice.speak(q), "transcript": q}
+
+
 def send(sid: str, user_text: str) -> dict:
     """Main conversational turn. Returns what Aria says next."""
     result = _send_inner(sid, user_text)
@@ -227,6 +242,24 @@ def _send_inner(sid: str, user_text: str) -> dict:
         s.cursor = 1
         s.phase = "required"
         return _next_question(s, ASK_ORDER[s.cursor])
+
+    if s.state == "interview":
+        # The patient's answers here become the appeal argument, so they go into
+        # `facts` (not `data`, which is the form) and also into the story so the
+        # policy match keeps improving as they talk.
+        fid = s.interview[s.cursor][0] if s.cursor < len(s.interview) else None
+        if fid:
+            if is_unknown(text):
+                s.facts[fid] = ""
+                _log(s, "fact_not_provided", "ok", "%s unknown; left blank" % fid)
+            else:
+                s.facts[fid] = text
+                s.story += " " + text
+                _log(s, "fact_learned", "ok", "%s: %s" % (fid, text[:80]))
+        s.cursor += 1
+        if s.cursor < len(s.interview):
+            return _ask_interview(s)
+        return _analyze(s)
 
     if s.state in ("asking", "clarifying"):
         if s.state == "clarifying":
@@ -327,16 +360,49 @@ def _analyze(s: Session, lead: str | None = None) -> dict:
         return {"session_id": s.session_id, "state": s.state, "refused": True,
                 "say": voice.speak(q), "transcript": q}
 
-    s.data["appeal_text"] = scenario["best_argument"]
     s.scenario_id = scenario["id"]
+
+    # The policy is known. Now ask the patient the specific things the plan's
+    # criteria turn on, so the argument is built from their facts rather than
+    # from a template applied to everyone.
+    if not s.interview and not s.facts:
+        script = argument.interview_for(scenario["id"])
+        if script:
+            s.interview = list(script)
+            s.cursor = 0
+            lead = ("Good news — I found the rule your plan overlooked. %s "
+                    "Now I need a few details from you, because those details are "
+                    "what make the argument land. A few short questions."
+                    % pol["cpb"].split("—")[0].strip().rstrip(".") + ".")
+            first = _ask_interview(s)
+            first["transcript"] = lead + " " + first["transcript"]
+            first["say"] = voice.speak(first["transcript"])
+            return first
+
+    return _draft(s, scenario, pol)
+
+
+def _draft(s: Session, scenario: dict, pol: dict) -> dict:
+    """Compose the appeal argument from the patient's own answers."""
     s.state = "drafted"
-    _log(s, "draft_appeal", "ok", "drafted appeal citing %s" % pol["cpb"])
+    # Use the scenario's clean service name, not the patient's spoken sentence.
+    # The raw answer is a paragraph ("a heart CT scan, they said it wasn't...")
+    # and reads badly inside "I am appealing the denial of X."
+    statement = argument.compose(
+        scenario["id"], s.facts,
+        service=scenario["service"],
+        denial_reason=s.data.get("denial_reason", "") or scenario["denial_reason"],
+    )
+    s.data["appeal_text"] = statement
+    _log(s, "draft_appeal", "ok", "composed appeal from %d fact(s) citing %s"
+         % (len([v for v in s.facts.values() if v]), pol["cpb"]))
     store.record_run("appealmate", "drafted", s.session_id)
 
-    q = ("I've drafted the comments for your appeal, and before we do anything I "
-         "want to read them to you. %s That's the heart of it. Would you like me "
-         "to file it, or change something first? Say 'file it' when you're ready."
-         % s.data["appeal_text"])
+    q = ("I've written your appeal from what you told me, and before we do "
+         "anything I want to read it to you. %s That's your argument. You can "
+         "copy that into the Comments section of the form. Would you like me to "
+         "file it, or change something first? Say 'file it' when you're ready."
+         % statement)
     return {
         "session_id": s.session_id, "state": s.state, "refused": False,
         "appeal_text": s.data["appeal_text"],

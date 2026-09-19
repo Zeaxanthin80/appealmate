@@ -59,21 +59,35 @@ sid = json.loads(body)["session_id"]
 check("POST /api/session -> intro", st == 200 and "Aria" in body)
 
 turns = [
-    ("Maria Fernandez", "asking"),
-    ("A123456789", "asking"),
-    ("Aetna Medicare Prime", "asking"),
-    ("a heart CT scan", "asking"),
-    ("September 10th", "asking"),
-    ("it said not medically necessary and a stress test should come first, but my stress test was inconclusive and I cannot exercise because of my knees", "asking"),
-    ("Dr. Rodriguez", "drafted"),
+    "Maria Fernandez",
+    "A123456789",
+    "a heart CT scan, they said it wasn't medically necessary and a stress test "
+    "should come first, but my stress test was inconclusive and I cannot "
+    "exercise because of my knees",
+    "Dr. Rodriguez",
+    "yes, it was denied",
 ]
 last = None
-for text, _expect in turns:
+for text in turns:
     st, body = post("/api/session/%s/say" % sid, {"text": text})
     last = json.loads(body)
+
+# The interview is the step where Aria gathers the facts her argument rests on.
+check("interview phase reached", last and last.get("state") == "interview",
+      (last or {}).get("state", "?"))
+
+for answer in ("chest pain when I walk",
+               "a treadmill test last April, it was inconclusive",
+               "I cannot walk on a treadmill, my knees are too bad",
+               "my brother died of a heart attack at 58"):
+    st, body = post("/api/session/%s/say" % sid, {"text": answer})
+    last = json.loads(body)
+
 check("conversation reaches 'drafted'", last and last.get("state") == "drafted",
       (last or {}).get("state", "?"))
 check("draft cites real CPB 0228", "0228" in (last or {}).get("policy_citation", ""))
+check("draft uses the patient's own words",
+      "chest pain when i walk" in (last or {}).get("appeal_text", "").lower())
 
 st, body = post("/api/session/%s/say" % sid, {"text": "file it"})
 filed = json.loads(body)

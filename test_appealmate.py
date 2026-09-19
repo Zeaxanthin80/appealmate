@@ -87,7 +87,7 @@ class TestUnknownAnswers(unittest.TestCase):
         self.assertNotEqual(r["state"], "refused")
 
     def test_optional_questions_accept_i_dont_know(self):
-        """The screenshot scenario: skip both optional questions, still draft."""
+        """The screenshot scenario: skip both optional questions, still proceed."""
         agent.SESSIONS.clear()
         sid = agent.start_session()["session_id"]
         agent.send(sid, "Maria Fernandez")
@@ -101,8 +101,9 @@ class TestUnknownAnswers(unittest.TestCase):
         self.assertEqual(r["state"], "asking")
         self.assertEqual(r["field"], "was_denied")
         r = agent.send(sid, "I don't know")           # was denied — unknown
-        self.assertEqual(r["state"], "drafted")
-        self.assertFalse(r["refused"])
+        # The optional questions are skipped and the policy interview begins.
+        self.assertEqual(r["state"], "interview")
+        self.assertFalse(r.get("refused", False))
 
 
 class TestClarifyingQuestion(unittest.TestCase):
@@ -145,6 +146,28 @@ class TestFullConversation(unittest.TestCase):
     def _say(self, text):
         return agent.send(self.sid, text)
 
+    def _to_interview(self, story=None):
+        """Drive the required + optional questions, stopping at the interview."""
+        self._say("Maria Fernandez")
+        self._say("A123456789")
+        r = self._say(story or (
+            "a heart CT scan, they said it wasn't medically necessary and a "
+            "stress test should come first, but my stress test was inconclusive "
+            "and I cannot exercise because of my knees"))
+        if r["state"] == "asking" and r.get("field") == "provider_requested":
+            self._say("Dr. Rodriguez")
+            r = self._say("yes, it was denied")
+        return r
+
+    def _finish_interview(self, answers=None):
+        """Answer interview questions until the state leaves 'interview'."""
+        answers = list(answers or [])
+        while True:
+            text = answers.pop(0) if answers else "I don't know"
+            r = self._say(text)
+            if r["state"] != "interview":
+                return r
+
     def test_intro_is_confident_and_promises_consent(self):
         """The intro must sound certain, and still promise no filing without consent.
 
@@ -161,46 +184,73 @@ class TestFullConversation(unittest.TestCase):
             self.assertNotIn(hedge, t)
 
     def test_happy_path_collects_fields_and_drafts(self):
-        r = self._say("Maria Fernandez")
-        self.assertEqual(r["state"], "asking")
-        self._say("A123456789")
-        r = self._say("a heart CT scan, they said it wasn't medically necessary "
-                      "and a stress test should come first, but my stress test "
-                      "was inconclusive and I cannot exercise because of my knees")
-        # Now the two optional questions.
-        self.assertEqual(r["field"], "provider_requested")
-        self._say("Dr. Rodriguez")
-        r = self._say("yes, it was denied")
+        r = self._to_interview()
+        # The interview is the new step: Aria asks for the facts her argument
+        # will stand on.
+        self.assertEqual(r["state"], "interview")
+        self.assertTrue(r["transcript"])
+
+        # Answer with the patient's real facts.
+        r = self._say("I get chest pain when I walk, and I have to stop")
+        self.assertEqual(r["state"], "interview")
+        r = self._say("I had a stress test last year, it was inconclusive")
+        r = self._say("No, I can't walk on a treadmill, my knees are too bad")
+        r = self._say("Yes, my brother died of a heart attack at 58")
         self.assertEqual(r["state"], "drafted")
         self.assertFalse(r["refused"])
         self.assertIn("CPB", r["policy_citation"])
         self.assertIn("0228", r["policy_citation"])
 
+    def test_argument_is_built_from_the_patients_own_words(self):
+        """The core of this design: the argument reflects their facts, not a template."""
+        self._to_interview()
+        self._say("I get chest pain when I walk, and I have to stop")
+        self._say("I had a treadmill test last April and it was inconclusive")
+        self._say("I cannot walk on a treadmill because of my knees")
+        r = self._say("My brother died of a heart attack at 58")
+        text = r["appeal_text"]
+        # Their specific details appear.
+        self.assertIn("chest pain when I walk", text)
+        self.assertIn("April", text)           # the date they gave
+        self.assertIn("knees", text)
+        self.assertIn("brother", text)
+        # And the policy it is anchored to.
+        self.assertIn("CPB 0228", text)
+
+    def test_facts_the_patient_cannot_supply_are_not_asserted(self):
+        """Missing facts become items for the plan to verify, never claimed."""
+        self._to_interview()
+        r = self._finish_interview()           # answer everything "I don't know"
+        self.assertEqual(r["state"], "drafted")
+        text = r["appeal_text"]
+        # Missing facts are delegated to the plan...
+        self.assertIn("asked to confirm from its own records", text)
+        # ...and are not invented. The patient never described symptoms, so no
+        # symptom claim may appear. (The word "inconclusive" does appear, but only
+        # inside the quotation of the plan's own criteria, so we check that no
+        # patient-evidence sentence was fabricated.)
+        self.assertNotIn("I am symptomatic as the criteria require", text)
+        self.assertNotIn("I fall within the bulletin's first alternative", text)
+        self.assertNotIn("My symptoms", text)
+
     def test_comments_field_holds_the_argument(self):
-        self._say("Maria Fernandez")
-        self._say("A123456789")
-        self._say("a heart CT scan, they said it wasn't medically necessary "
-                  "and a stress test should come first, but my stress test "
-                  "was inconclusive and I cannot exercise because of my knees")
-        self._say("Dr. Rodriguez")
-        self._say("yes")
+        self._to_interview()
+        self._say("chest pain when I walk")
+        self._say("my stress test was inconclusive")
+        self._say("I cannot exercise because of my knees")
+        self._say("my brother had a heart attack")
         self._say("file it")
         form = agent.generate_form(agent._load(self.sid))
         by_id = {f["id"]: f for f in form["fields"]}
         self.assertIn("comments", by_id)
         self.assertTrue(by_id["comments"]["filled"])
         self.assertIn("CPB 0228", by_id["comments"]["value"])
-        # The provider answer was captured this time.
         self.assertEqual(by_id["provider_requested"]["value"], "Dr. Rodriguez")
 
     def test_file_only_after_consent(self):
-        self._say("Maria Fernandez")
-        self._say("A123456789")
-        self._say("a heart CT scan, they said it wasn't medically necessary "
-                  "and a stress test should come first, but my stress test "
-                  "was inconclusive and I cannot exercise because of my knees")
-        self._say("I don't know")
-        r = self._say("I don't know")
+        r = self._to_interview()
+        r = self._finish_interview(["chest pain", "inconclusive test",
+                                    "cannot exercise", "family history"])
         self.assertEqual(r["state"], "drafted")
         r = self._say("sounds good")
         self.assertNotEqual(r["state"], "filed")
@@ -242,6 +292,11 @@ class TestFormModel(unittest.TestCase):
                         "exercise because of my knees")
         agent.send(sid, "I don't know")   # provider
         agent.send(sid, "I don't know")   # was_denied
+        # Walk the policy interview, answering nothing.
+        for _ in range(6):
+            r = agent.send(sid, "I don't know")
+            if r["state"] != "interview":
+                break
         r = agent.send(sid, "file it")
         by_id = {f["id"]: f for f in r["form"]["fields"]}
         self.assertEqual(by_id["provider_requested"]["value"], "")
@@ -259,6 +314,10 @@ class TestFormModel(unittest.TestCase):
                         "was inconclusive and I cannot exercise because of my knees")
         agent.send(sid, "I don't know")   # provider unknown
         agent.send(sid, "I don't know")   # was_denied unknown
+        for _ in range(6):
+            r = agent.send(sid, "I don't know")
+            if r["state"] != "interview":
+                break
         r = agent.send(sid, "file it")
         self.assertEqual(r["state"], "filed")
         # The required fields are filled; the unknowns are simply blank.
