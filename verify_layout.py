@@ -10,7 +10,7 @@ Run:  python verify_layout.py
 import re
 import sys
 
-html = open("index.html", encoding="utf-8").read()
+html = open(__file__.replace("verify_layout.py", "index.html"), encoding="utf-8").read()
 fails = []
 
 
@@ -99,6 +99,11 @@ check("logo svg present", svg_tag is not None)
 if svg_tag:
     stroke = float(re.search(r'stroke-width="([\d.]+)"', svg_tag.group(0)).group(1))
     check("heart stroke stays thin (<=1.5)", stroke <= 1.5, "stroke=%s" % stroke)
+
+hero = re.search(r"#hero\s*\{[^}]*\}", html, re.S)
+hero_n = re.sub(r"\s+", "", hero.group(0) if hero else "")
+check("#hero is a flex column", "display:flex" in hero_n and "flex-direction:column" in hero_n)
+check("#hero centres its copy", "align-items:center" in hero_n and "justify-content:center" in hero_n)
 
 print("\nRESULT: %s (%d failure(s))" % ("PASS" if not fails else "FAIL", len(fails)))
 for f in fails:

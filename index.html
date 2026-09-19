@@ -74,18 +74,18 @@
   .pill.stop .dot { background:var(--bad); }
   @keyframes blink { 50% { opacity:.25 } }
 
-  /* Hero statement: the "what is this" copy that sits above the conversation
-     card before the caller presses the button. Fades out once the caller
-     starts talking, because at that point the purpose of the app is plain
-     and the stage belongs to the conversation. */
+  /* Hero statement: fills the leftover column (the 1fr grid row) and
+     centres its copy in that box — horizontally and vertically — so it
+     sits in the middle of the idle screen, not stuck to the top. */
   #hero {
-    text-align:center; padding:clamp(14px,2.4vh,22px) 8px 0;
-    overflow:hidden; max-height:220px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:clamp(14px,2.4vh,22px) 8px;
+    overflow:hidden; min-height:0;
     transition:opacity .4s ease, transform .4s ease, max-height .4s ease, padding .4s ease;
   }
   #hero h1 {
     margin:0 0 6px; font-size:clamp(22px,3vh,28px); font-weight:700;
-    color:var(--ink); letter-spacing:-.01em;
+    color:var(--ink); letter-spacing:-.01em; max-width:22em;
   }
   #hero p {
     margin:0; font-size:clamp(15px,2vh,18px); color:var(--muted); font-weight:500;
@@ -94,6 +94,7 @@
     opacity:0; transform:translateY(-8px); max-height:0; padding:0;
     pointer-events:none;
   }
+  body.talking .stage { grid-template-rows:auto 0fr 1fr; }
 
   /* A single column, top-aligned. The conversation card grows to fill whatever
      height is left, which both enlarges it and pushes the two buttons down into
