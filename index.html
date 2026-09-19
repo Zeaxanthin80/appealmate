@@ -165,10 +165,25 @@
   function showForm(form) {
     const box = document.createElement('details');
     box.open = true;
-    let rows = form.fields.map(f =>
-      '<tr><td><b>' + escapeHtml(f.label) + '</b></td><td>' + escapeHtml(f.value || '—') + '</td></tr>').join('');
-    box.innerHTML = '<summary>Appeal submitted — confirmation ' + escapeHtml(form.confirmation) + '</summary>' +
-      '<table style="width:100%;font-size:16px;font-family:Arial">' + rows + '</table>';
+    let rows = form.fields.map(f => {
+      const val = f.value ? escapeHtml(f.value)
+                          : '<span style="color:#b45309">Not provided — the plan will fill this in</span>';
+      const req = f.required
+        ? '<b style="color:#b91c1c">Required</b>'
+        : '<span style="color:#64748b">Optional</span>';
+      return '<tr><td style="width:32%"><b>' + escapeHtml(f.label) + '</b><br>' + req +
+             '</td><td>' + val + '</td></tr>';
+    }).join('');
+    const warn = form.missing_required && form.missing_required.length
+      ? '<p style="color:#b91c1c"><b>Still needed before signing:</b> ' +
+        escapeHtml(form.missing_required.join(', ')) + '</p>'
+      : '<p style="color:#15803d"><b>All required fields are complete.</b></p>';
+    box.innerHTML =
+      '<summary>Appeal form — confirmation ' + escapeHtml(form.confirmation) + '</summary>' +
+      warn +
+      '<table style="width:100%;font-size:16px;font-family:Arial">' + rows + '</table>' +
+      '<p style="font-size:14px;color:#5a6480">The <b>Comments</b> field holds your argument. ' +
+      'Review it, then print or read it to your plan.</p>';
     convo.appendChild(box);
   }
 

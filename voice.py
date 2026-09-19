@@ -15,7 +15,9 @@ import urllib.request
 
 
 TTS_URL = "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
-DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"  # "Bella" — warm, clear female voice
+# Sarah — "Mature, Reassuring, Confident", female American. Chosen because the
+# caller is often an anxious older adult; a calm, mature voice reads as credible.
+DEFAULT_VOICE = "EXAVITQu4vr4xnSDxMaL"
 
 
 def speak(text: str, voice_id: str | None = None) -> dict:

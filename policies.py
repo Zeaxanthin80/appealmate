@@ -21,20 +21,38 @@ clinical or legal advice; it is demo content for a hackathon.
 from __future__ import annotations
 
 # ---------------------------------------------------------------------------
-# Appeal form model — fields on the Aetna Medicare Part C appeal
-# (redetermination request) form. Field IDs mirror the form's sections.
+# Appeal form model — fields on the Aetna Medicare Advantage (Part C)
+# "Request for an Appeal of a Plan Authorization Denial" form.
+#
+# Tuple: (id, label, source, required)
+#   source "ask"     — Aria asks the member
+#   source "derived" — Aria writes it from the policy match
+#   required         — the plan marks this field required
+#
+# Two fields members routinely cannot answer are modelled as NOT required and
+# are never allowed to block an appeal:
+#   * provider_requested — often unknown; the plan can pull it from its own
+#     records, and Aria says so rather than pressing the member.
+#   * was_denied         — the denial letter is the proof; asking the member to
+#     confirm it is a formality they often can't fulfil.
+# The Comments section is where the appeal argument goes, and it is the point
+# of the whole exercise.
 # ---------------------------------------------------------------------------
 
 FORM_FIELDS = [
-    ("member_name", "Member name", "ask"),
-    ("member_id", "Member ID number", "ask"),
-    ("plan_name", "Plan name", "ask"),
-    ("service_denied", "Service / item denied", "ask"),
-    ("date_of_denial", "Date of denial letter", "ask"),
-    ("denial_reason", "Reason for denial (from the letter)", "ask"),
-    ("provider_name", "Ordering provider name", "ask"),
-    ("appeal_text", "Why this service should be covered (your appeal statement)", "derived"),
+    ("member_name", "Member name", "ask", True),
+    ("member_id", "Member ID number", "ask", True),
+    ("plan_name", "Plan name", "ask", False),
+    ("provider_requested", "Provider who requested the service", "ask", False),
+    ("service_denied", "Service / item that was denied", "ask", True),
+    ("date_of_denial", "Date of denial letter", "ask", False),
+    ("was_denied", "Was the request denied?", "ask", False),
+    ("comments", "Comments — why this service should be covered", "derived", True),
 ]
+
+# Shown on the review screen so the member knows what they must complete.
+REQUIRED_NOTE = ("The plan requires the fields marked Required. Anything else can "
+                 "be left for the plan to fill in from its own records.")
 
 # ---------------------------------------------------------------------------
 # Denial scenarios. Each is what the caller tells the agent.
@@ -179,15 +197,59 @@ SCENARIOS = [
 
 
 def find_scenario(text: str) -> dict | None:
-    """Match a caller's story to a known scenario. Returns None when nothing matches."""
+    """Match a caller's words to a known scenario. Returns None when nothing matches.
+
+    Scoring combines the scenario's tuned match_keys (strong, domain-specific
+    signal) with general word overlap (weak signal). The match_keys carry the
+    weight because a member rarely narrates in the same words as the policy —
+    they say "motorized chair", not "power operated vehicle".
+    """
     t = (text or "").lower()
     if not t.strip():
         return None
-    scored = []
+
+    # Words the member actually used, lowercased and stripped of punctuation.
+    tokens = {w.strip(".,!?;:'\"()") for w in t.split()}
+    tokens = {w for w in tokens if len(w) > 2}
+    joined = " ".join(tokens)
+
+    best = None
+    best_score = 0.0
     for s in SCENARIOS:
+        # Strong signal: each domain-specific key phrase the member used is
+        # worth more than any amount of incidental word overlap.
+        keys = s["policy"].get("match_keys", [])
+        key_hits = 0
+        for k in keys:
+            if " " in k:
+                if k in t:
+                    key_hits += 1
+            elif k in tokens:
+                key_hits += 1
+        key_score = key_hits * 5.0
+
+        # Weak signal: general overlap with the scenario's own text.
         hay = (s["caller_story"] + " " + s["service"] + " " + s["denial_reason"]).lower()
-        words = {w.strip(".,!?;:'\"()") for w in t.split() if len(w) > 4}
-        overlap = len(words & set(hay.split()))
-        scored.append((overlap, s))
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return scored[0][1] if scored and scored[0][0] >= 3 else None
+        hay_words = {w.strip(".,!?;:'\"()") for w in hay.split() if len(w) > 4}
+        overlap = len(tokens & hay_words)
+
+        score = key_score + overlap
+        if score > best_score:
+            best_score = score
+            best = s
+
+    # One strong key phrase ("wheelchair", "physical therapy") is enough to
+    # match; incidental shared words alone are not.
+    return best if best_score >= 4.0 else None
+
+
+def suggests_category(text: str) -> str | None:
+    """Best-guess category from a clarifying answer, for logging only."""
+    t = (text or "").lower()
+    if any(w in t for w in ("scan", "test", "imaging", "mri", "ct", "x-ray", "ultrasound")):
+        return "imaging"
+    if any(w in t for w in ("therapy", "physical", "rehab", "exercise")):
+        return "therapy"
+    if any(w in t for w in ("wheelchair", "scooter", "walker", "chair", "bed", "equipment")):
+        return "equipment"
+    return None
