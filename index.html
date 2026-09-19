@@ -61,14 +61,19 @@
   .pill.stop .dot { background:var(--bad); }
   @keyframes blink { 50% { opacity:.25 } }
 
+  /* A single column, top-aligned. The conversation card grows to fill whatever
+     height is left, which both enlarges it and pushes the two buttons down into
+     the lower half of the screen. The gap is declared once here so the space
+     between card and button is identical to the space between button and
+     Start over. */
   .center { min-height:0; display:flex; flex-direction:column; align-items:center;
-            justify-content:center; gap:clamp(10px,1.6vh,18px); }
+            justify-content:flex-start; gap:clamp(14px,2.2vh,24px); }
 
   .say {
-    width:100%; max-width:820px;
+    width:100%; max-width:820px; flex:1 1 auto; min-height:0;
     background:var(--white); border:1px solid var(--line); border-radius:20px;
     box-shadow:var(--shadow); padding:clamp(20px,3vh,34px) clamp(20px,3vw,38px);
-    max-height:min(40vh, 360px); overflow:auto;
+    overflow:auto;
   }
   .who {
     display:flex; align-items:center; gap:8px;
@@ -104,11 +109,10 @@
   #talk.listening { background:linear-gradient(150deg, #d64545 0%, #a52f2f 100%); }
   #talk:disabled { filter:grayscale(.5); opacity:.6; cursor:default; transform:none; }
 
-  /* Start over sits snug under the button, and the whole group is pushed down
-     to give the conversation card more room above it. */
+  /* Start over sits directly under the button. The spacing comes from the
+     column gap, so it matches the gap between the card and the button exactly. */
   .undercall {
     display:flex; flex-direction:column; align-items:center;
-    margin-top:clamp(10px,2vh,22px);
   }
   .ghost.small { font-size:13px; padding:7px 15px; border-radius:999px;
                  display:inline-flex; align-items:center; gap:7px; }
@@ -174,14 +178,13 @@
   .pane { display:none; } .pane.on { display:block; }
 
   @media (max-height:620px) {
-    .say { max-height:30vh; }
-    /* Keep the mic and label large enough to read and hit, but let the ring
-       and button shrink so nothing overflows a short window. */
+    /* The card flexes to fill the column, so no fixed height here. Only the
+       button, ring and gaps shrink, keeping the mic and label legible. */
     #talk { width:clamp(150px,26vh,200px); height:clamp(150px,26vh,200px); }
     #talk .lbl { font-size:clamp(15px,2.2vh,18px); }
     #talk svg { width:clamp(50px,9vh,66px); height:clamp(50px,9vh,66px); }
     .ring { width:clamp(176px,30vh,240px); height:clamp(176px,30vh,240px); }
-    .undercall { margin-top:6px; }
+    .center { gap:10px; }
   }
 </style>
 </head>
