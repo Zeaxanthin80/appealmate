@@ -27,12 +27,16 @@ check(".center declares a gap", "gap:" in center)
 check(".center is top-aligned (buttons fall to lower half)",
       "justify-content:flex-start" in center.replace(" ", ""))
 
-# 2. The card grows, so the buttons are pushed down.
+# 2. Idle card is hidden; talking card grows to fill leftover height.
 say = re.search(r"\.say\s*\{[^}]*\}", html, re.S).group(0)
 say_norm = re.sub(r"\s+", " ", say)
-check(".say grows to fill leftover height", "flex:1 1 auto" in say_norm,
-      [ln.strip() for ln in say.splitlines() if "flex" in ln])
-check(".say has no fixed max-height fighting the growth", "max-height" not in say)
+check(".say starts hidden (idle)", "opacity:0" in say_norm and "max-height:0" in say_norm)
+talking = re.search(r"body\.talking\s+\.say\s*\{[^}]*\}", html, re.S)
+talking_norm = re.sub(r"\s+", " ", talking.group(0)) if talking else ""
+check("talking .say grows to fill leftover height",
+      talking is not None and "flex:1 1 auto" in talking_norm,
+      talking_norm[:80] if talking_norm else "no body.talking .say rule")
+check("talking .say is visible", talking is not None and "opacity:1" in talking_norm)
 
 # 2b. The desktop presentation width, and that it stays fluid on a phone.
 cap = re.search(r"max-width:(\d+)px", say)

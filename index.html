@@ -74,6 +74,27 @@
   .pill.stop .dot { background:var(--bad); }
   @keyframes blink { 50% { opacity:.25 } }
 
+  /* Hero statement: the "what is this" copy that sits above the conversation
+     card before the caller presses the button. Fades out once the caller
+     starts talking, because at that point the purpose of the app is plain
+     and the stage belongs to the conversation. */
+  #hero {
+    text-align:center; padding:clamp(14px,2.4vh,22px) 8px 0;
+    overflow:hidden; max-height:220px;
+    transition:opacity .4s ease, transform .4s ease, max-height .4s ease, padding .4s ease;
+  }
+  #hero h1 {
+    margin:0 0 6px; font-size:clamp(22px,3vh,28px); font-weight:700;
+    color:var(--ink); letter-spacing:-.01em;
+  }
+  #hero p {
+    margin:0; font-size:clamp(15px,2vh,18px); color:var(--muted); font-weight:500;
+  }
+  body.talking #hero {
+    opacity:0; transform:translateY(-8px); max-height:0; padding:0;
+    pointer-events:none;
+  }
+
   /* A single column, top-aligned. The conversation card grows to fill whatever
      height is left, which both enlarges it and pushes the two buttons down into
      the lower half of the screen. The gap is declared once here so the space
@@ -84,12 +105,19 @@
 
   .say {
     /* 860px is the desktop presentation width. width:100% keeps the card fluid
-       on a phone, where the viewport is narrower than this cap anyway — so the
-       mobile layout is untouched. */
-    width:100%; max-width:860px; flex:1 1 auto; min-height:0;
-    background:var(--white); border:1px solid var(--line); border-radius:20px;
-    box-shadow:var(--shadow); padding:clamp(20px,3vh,34px) clamp(20px,3vw,38px);
-    overflow:auto;
+       on a phone. Hidden on the idle screen so the hero is the only copy;
+       fades in when the caller presses the button (body.talking). */
+    width:100%; max-width:860px;
+    background:var(--white); border:1px solid transparent; border-radius:20px;
+    flex:0 0 auto; max-height:0; min-height:0; opacity:0; padding:0;
+    overflow:hidden; pointer-events:none; transform:translateY(12px);
+    transition:opacity .45s ease, transform .45s ease, max-height .45s ease, padding .45s ease, border-color .45s ease;
+  }
+  body.talking .say {
+    flex:1 1 auto; max-height:70vh; min-height:0; opacity:1;
+    padding:clamp(20px,3vh,34px) clamp(20px,3vw,38px);
+    border-color:var(--line); box-shadow:var(--shadow); overflow:auto;
+    pointer-events:auto; transform:none;
   }
   .who {
     display:flex; align-items:center; gap:8px;
@@ -99,14 +127,6 @@
   .who i { width:7px; height:7px; border-radius:50%; background:var(--teal); display:block; }
   .say p { font-size:clamp(17px,2.1vh,20px); line-height:1.55; color:var(--ink); }
   .say.empty p { color:var(--muted); }
-
-  /* Project tagline — sits above Aria's first line so the caller reads what
-     this app is before Aria greets them. Dims once the conversation starts,
-     since by then the caller's purpose is plain. */
-  .say .tagline { font-size:14px; line-height:1.5; color:var(--muted);
-                  border-left:3px solid var(--teal); padding:2px 0 2px 12px;
-                  margin-bottom:14px; font-weight:500; }
-  .say:not(.empty) .tagline { opacity:.6; }
 
   .talkwrap { position:relative; display:grid; place-items:center; }
   .ring {
@@ -237,9 +257,16 @@
     <span class="pill" id="status"><span class="dot"></span><span id="statusText">Ready when you are</span></span>
   </div>
 
+  <!-- Hero statement: shown until the caller presses the button for the first
+       time, then fades away so the conversation card takes the whole stage.
+       Once they've started talking, the question "what is this" is answered. -->
+  <div id="hero" aria-hidden="false">
+    <h1>AppealMate helps patients appeal denied prior authorizations.</h1>
+    <p>Just press the button to talk.</p>
+  </div>
+
   <div class="center">
-    <section class="say empty has-tagline" id="sayBox" aria-live="polite">
-      <p class="tagline">AppealMate is a voice agent that helps Medicare Advantage patients appeal denied prior authorizations. You press one button and talk; Aria interviews you, cites the exact rule your plan's denial violates.</p>
+    <section class="say empty" id="sayBox" aria-live="polite">
       <div class="who"><i></i>Aria</div>
       <p id="sayText">Tap the button and tell me what was denied. I'll find the rule your plan overlooked and write your appeal.</p>
     </section>
@@ -350,6 +377,7 @@
   }
 
   async function begin() {
+    document.body.classList.add('talking'); // hero fades on first press
     busy = true; setStatus('Connecting…', 'thinking');
     try {
       const r = await api('/api/session', {method:'POST'});
