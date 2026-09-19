@@ -1,11 +1,11 @@
-"""Measure the rendered layout to verify the two gaps are equal and the buttons
-sit in the lower half of the screen.
+"""Assert the call screen's layout contract directly, from index.html.
 
-Uses a headless browser via the Mel browser tool is not scriptable here, so this
-reads the geometry from the DOM using the site's own JS context through a
-temporary probe page is not possible either. Instead this asserts the CSS
-contract: a single flex `gap` on .center governs both spaces, and no
-margin/padding on the intervening elements adds to either side.
+The rendered result is verified with screenshots; this file guards the
+properties that are easy to break silently by editing CSS — a second gap
+creeping in, a max-height reappearing, a logo glyph shrinking back inside its
+tile. If this passes and the screenshot looks right, the layout is right.
+
+Run:  python verify_layout.py
 """
 import re
 import sys
@@ -21,17 +21,14 @@ def check(label, cond, detail=""):
 
 
 # 1. One gap governs the column.
-m = re.search(r"\.center\s*\{[^}]*\}", html, re.S)
-center = m.group(0) if m else ""
+center = re.search(r"\.center\s*\{[^}]*\}", html, re.S).group(0)
 check(".center is a flex column", "display:flex" in center.replace(" ", ""))
 check(".center declares a gap", "gap:" in center)
 check(".center is top-aligned (buttons fall to lower half)",
       "justify-content:flex-start" in center.replace(" ", ""))
 
 # 2. The card grows, so the buttons are pushed down.
-m = re.search(r"\.say\s*\{[^}]*\}", html, re.S)
-say = m.group(0) if m else ""
-# Normalise whitespace without destroying the spaces inside "1 1 auto".
+say = re.search(r"\.say\s*\{[^}]*\}", html, re.S).group(0)
 say_norm = re.sub(r"\s+", " ", say)
 check(".say grows to fill leftover height", "flex:1 1 auto" in say_norm,
       [ln.strip() for ln in say.splitlines() if "flex" in ln])
@@ -50,13 +47,27 @@ check(".undercall adds no margin (gap stays equal)",
       "margin" not in under, under.replace("\n", " ")[:70])
 
 # 5. Short-screen rule must not reintroduce a fixed card height.
-m = re.search(r"@media \(max-height:620px\)\s*\{(.*?)\n  \}", html, re.S)
-media = m.group(1) if m else ""
-check("short-screen rule does not pin .say height", ".say" not in media)
+media = re.search(r"@media \(max-height:620px\)\s*\{(.*?)\n  \}", html, re.S)
+check("short-screen rule does not pin .say height", ".say" not in (media.group(1) if media else ""))
 
 # 6. The removed caption is really gone, and nothing still writes to it.
 check("caption text removed", "stay on this device" not in html)
 check("no dangling $('#hint') reference", "$('hint')" not in html)
+
+# 7. The logo mark: the heart must fill its tile, with a thin stroke.
+tile = re.search(r"\.mark\s*\{[^}]*\}", html, re.S).group(0)
+mark_svg = re.search(r"\.mark svg\s*\{[^}]*\}", html, re.S).group(0)
+tile_px = int(re.search(r"width:(\d+)px", tile).group(1))
+glyph_px = int(re.search(r"width:(\d+)px", mark_svg).group(1))
+ratio = glyph_px / tile_px
+check("heart fills most of the tile (>=0.75)", ratio >= 0.75,
+      "tile=%dpx glyph=%dpx ratio=%.2f" % (tile_px, glyph_px, ratio))
+
+svg_tag = re.search(r"<svg viewBox=\"2 3\.2[^>]*>", html, re.S)
+check("logo svg present", svg_tag is not None)
+if svg_tag:
+    stroke = float(re.search(r'stroke-width="([\d.]+)"', svg_tag.group(0)).group(1))
+    check("heart stroke stays thin (<=1.5)", stroke <= 1.5, "stroke=%s" % stroke)
 
 print("\nRESULT: %s (%d failure(s))" % ("PASS" if not fails else "FAIL", len(fails)))
 for f in fails:
