@@ -43,6 +43,24 @@ check(".say stays fluid on narrow screens",
       re.search(r"width:100%", say_norm) is not None,
       "width:100% means the 860px cap cannot break the mobile layout")
 
+# 2c. One column for the whole page: nav, stage and footer share the measure, so
+#     their left and right edges line up with the conversation card.
+col = re.search(r"--col:\s*(\d+)px", html)
+check("a single --col measure is defined", col is not None,
+      col.group(0) if col else "missing")
+if col:
+    check("--col matches the card width (860px)", col.group(1) == "860", col.group(1))
+for band, pat in (("header", r"\bheader\s*\{[^}]*\}"),
+                  ("footer", r"\bfooter\s*\{[^}]*\}"),
+                  (".stage", r"\.stage\s*\{[^}]*\}")):
+    rule = re.sub(r"\s+", "", re.search(pat, html, re.S).group(0))
+    check("%s uses the shared column" % band, "max-width:var(--col)" in rule)
+# Below the column width there is no slack to centre into, so real gutters are
+# needed or the content sits flush against the screen edge.
+check("gutter defined for narrow screens", "--gut:" in html)
+check("gutter applied below the column width",
+      re.search(r"@media \(max-width:900px\)\s*\{\s*:root\s*\{[^}]*--gut:\s*\d+px", html) is not None)
+
 # 3. Nothing between the card and the button adds extra space.
 check(".talkwrap has no margin", "margin" not in re.search(
     r"\.talkwrap\s*\{[^}]*\}", html, re.S).group(0))
