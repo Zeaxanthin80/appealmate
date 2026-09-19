@@ -34,6 +34,15 @@ check(".say grows to fill leftover height", "flex:1 1 auto" in say_norm,
       [ln.strip() for ln in say.splitlines() if "flex" in ln])
 check(".say has no fixed max-height fighting the growth", "max-height" not in say)
 
+# 2b. The desktop presentation width, and that it stays fluid on a phone.
+cap = re.search(r"max-width:(\d+)px", say)
+check(".say caps at the 860px presentation width",
+      cap is not None and cap.group(1) == "860",
+      cap.group(0) if cap else "no max-width found")
+check(".say stays fluid on narrow screens",
+      re.search(r"width:100%", say_norm) is not None,
+      "width:100% means the 860px cap cannot break the mobile layout")
+
 # 3. Nothing between the card and the button adds extra space.
 check(".talkwrap has no margin", "margin" not in re.search(
     r"\.talkwrap\s*\{[^}]*\}", html, re.S).group(0))

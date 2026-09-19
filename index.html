@@ -70,7 +70,10 @@
             justify-content:flex-start; gap:clamp(14px,2.2vh,24px); }
 
   .say {
-    width:100%; max-width:820px; flex:1 1 auto; min-height:0;
+    /* 860px is the desktop presentation width. width:100% keeps the card fluid
+       on a phone, where the viewport is narrower than this cap anyway — so the
+       mobile layout is untouched. */
+    width:100%; max-width:860px; flex:1 1 auto; min-height:0;
     background:var(--white); border:1px solid var(--line); border-radius:20px;
     box-shadow:var(--shadow); padding:clamp(20px,3vh,34px) clamp(20px,3vw,38px);
     overflow:auto;
